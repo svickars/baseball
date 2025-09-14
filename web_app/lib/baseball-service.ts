@@ -56,6 +56,18 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 
 		const data = await response.json();
 		console.log(`MLB API returned ${data.dates?.length || 0} dates, ${data.dates?.[0]?.games?.length || 0} games`);
+		
+		// Debug: log first few games
+		if (data.dates?.[0]?.games) {
+			console.log('First 3 games:');
+			data.dates[0].games.slice(0, 3).forEach((game: any, index: number) => {
+				const awayTeam = game.teams?.away?.team?.name;
+				const homeTeam = game.teams?.home?.team?.name;
+				const awayCode = TEAM_ABBREVIATIONS[awayTeam];
+				const homeCode = TEAM_ABBREVIATIONS[homeTeam];
+				console.log(`  ${index + 1}. ${awayTeam} (${awayCode}) vs ${homeTeam} (${homeCode})`);
+			});
+		}
 
 		const games: Game[] = [];
 
@@ -194,28 +206,39 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 		// Find the game data from the schedule
 		let gameData = null;
 		if (scheduleData.dates && scheduleData.dates.length > 0) {
-			for (const game of scheduleData.dates[0].games) {
-				const teams = game.teams || {};
-				const awayTeam = teams.away || {};
-				const homeTeam = teams.home || {};
-				const gameDetails = game.game || {};
+			// First try to find by gamePk if we have it
+			if (gamePk) {
+				gameData = scheduleData.dates[0].games.find((game: any) => game.gamePk === gamePk);
+				if (gameData) {
+					console.log('Found game by gamePk:', gamePk);
+				}
+			}
+			
+			// If not found by gamePk, try by team codes
+			if (!gameData) {
+				for (const game of scheduleData.dates[0].games) {
+					const teams = game.teams || {};
+					const awayTeam = teams.away || {};
+					const homeTeam = teams.home || {};
+					const gameDetails = game.game || {};
 
-				const awayTeamName = awayTeam.team?.name;
-				const homeTeamName = homeTeam.team?.name;
-				const awayCodeFromName = TEAM_ABBREVIATIONS[awayTeamName];
-				const homeCodeFromName = TEAM_ABBREVIATIONS[homeTeamName];
+					const awayTeamName = awayTeam.team?.name;
+					const homeTeamName = homeTeam.team?.name;
+					const awayCodeFromName = TEAM_ABBREVIATIONS[awayTeamName];
+					const homeCodeFromName = TEAM_ABBREVIATIONS[homeTeamName];
 
-				console.log(`Checking game: ${awayTeamName} (${awayCodeFromName}) vs ${homeTeamName} (${homeCodeFromName})`);
-				console.log(`Looking for: ${awayCode} vs ${homeCode}`);
+					console.log(`Checking game: ${awayTeamName} (${awayCodeFromName}) vs ${homeTeamName} (${homeCodeFromName})`);
+					console.log(`Looking for: ${awayCode} vs ${homeCode}`);
+					console.log(`Game number: ${gameDetails.gameNumber || 1}, looking for: ${gameNumber}`);
 
-				if (
-					awayCodeFromName === awayCode &&
-					homeCodeFromName === homeCode &&
-					(gameDetails.gameNumber || 1) === gameNumber
-				) {
-					gameData = game;
-					console.log('Found matching game!');
-					break;
+					if (
+						awayCodeFromName === awayCode &&
+						homeCodeFromName === homeCode
+					) {
+						gameData = game;
+						console.log('Found matching game!');
+						break;
+					}
 				}
 			}
 		}
@@ -269,6 +292,8 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 		};
 	} catch (error) {
 		console.error(`Error fetching game details for ${gameId}:`, error);
+		console.error('Error details:', error instanceof Error ? error.message : String(error));
+		console.log('Falling back to mock data');
 
 		// Fallback to mock data if API fails
 		const parts = gameId.split('-');
