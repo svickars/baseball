@@ -45,16 +45,17 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 		const month = dateObj.getMonth() + 1; // JavaScript months are 0-indexed
 		const day = dateObj.getDate();
 
+		console.log(`Fetching games for date: ${date} (${month}/${day}/${year})`);
+
 		// Fetch games from MLB API
-		const response = await fetch(
-			`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}`
-		);
+		const response = await fetch(`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}`);
 
 		if (!response.ok) {
 			throw new Error(`MLB API error: ${response.status}`);
 		}
 
 		const data = await response.json();
+		console.log(`MLB API returned ${data.dates?.length || 0} dates, ${data.dates?.[0]?.games?.length || 0} games`);
 
 		const games: Game[] = [];
 
@@ -87,6 +88,10 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 				const awayCode = TEAM_ABBREVIATIONS[awayTeamName] || '';
 				const homeCode = TEAM_ABBREVIATIONS[homeTeamName] || '';
 
+				// Get current scores from the teams data
+				const awayScore = awayTeam.score || 0;
+				const homeScore = homeTeam.score || 0;
+
 				const game: Game = {
 					id: `${date}-${awayCode}-${homeCode}-${gameDetails.gameNumber || 1}`,
 					away_team: awayTeamName,
@@ -101,8 +106,8 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 					is_live: status.codedGameState === 'I' || status.codedGameState === 'S',
 					inning: gameData.linescore?.currentInning || '',
 					inning_state: gameData.linescore?.inningState || '',
-					away_score: gameData.linescore?.teams?.away?.runs || 0,
-					home_score: gameData.linescore?.teams?.home?.runs || 0,
+					away_score: awayScore,
+					home_score: homeScore,
 				};
 
 				games.push(game);
@@ -112,6 +117,7 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 		return games;
 	} catch (error) {
 		console.error(`Error fetching games for ${date}:`, error);
+		console.log('Falling back to mock data');
 
 		// Fallback to mock data if API fails
 		return [
@@ -154,9 +160,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 		const month = dateObj.getMonth() + 1;
 		const day = dateObj.getDate();
 
-		const scheduleResponse = await fetch(
-			`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}`
-		);
+		const scheduleResponse = await fetch(`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}`);
 
 		if (!scheduleResponse.ok) {
 			throw new Error(`MLB API error: ${scheduleResponse.status}`);
@@ -187,25 +191,61 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 			throw new Error('Game not found in schedule');
 		}
 
-		// Get detailed game data
-		const gameResponse = await fetch(`${MLB_API_BASE}/game/${gamePk}/feed/live`);
-		if (!gameResponse.ok) {
-			throw new Error(`MLB API error: ${gameResponse.status}`);
+		// Find the game data from the schedule
+		let gameData = null;
+		if (scheduleData.dates && scheduleData.dates.length > 0) {
+			for (const game of scheduleData.dates[0].games) {
+				const teams = game.teams || {};
+				const awayTeam = teams.away || {};
+				const homeTeam = teams.home || {};
+				const gameDetails = game.game || {};
+
+				const awayTeamName = awayTeam.team?.name;
+				const homeTeamName = homeTeam.team?.name;
+				const awayCodeFromName = TEAM_ABBREVIATIONS[awayTeamName];
+				const homeCodeFromName = TEAM_ABBREVIATIONS[homeTeamName];
+
+				console.log(`Checking game: ${awayTeamName} (${awayCodeFromName}) vs ${homeTeamName} (${homeCodeFromName})`);
+				console.log(`Looking for: ${awayCode} vs ${homeCode}`);
+
+				if (
+					awayCodeFromName === awayCode &&
+					homeCodeFromName === homeCode &&
+					(gameDetails.gameNumber || 1) === gameNumber
+				) {
+					gameData = game;
+					console.log('Found matching game!');
+					break;
+				}
+			}
 		}
 
-		const gameData = await gameResponse.json();
+		if (!gameData) {
+			throw new Error('Game not found in schedule');
+		}
 
-		// For now, return a simplified game data structure
-		// In a full implementation, you'd process this data similar to your Python library
-		const gameInfo = gameData.gameData || {};
-		const teams = gameInfo.teams || {};
+		// Extract game information from schedule data
+		const teams = gameData.teams || {};
 		const awayTeam = teams.away || {};
 		const homeTeam = teams.home || {};
+		const gameInfo = gameData.game || {};
+		const status = gameData.status || {};
 
 		const awayTeamName = awayTeam.team?.name || 'Away Team';
 		const homeTeamName = homeTeam.team?.name || 'Home Team';
 		const awayCodeFromName = TEAM_ABBREVIATIONS[awayTeamName] || 'AWY';
 		const homeCodeFromName = TEAM_ABBREVIATIONS[homeTeamName] || 'HOM';
+
+		// Get scores from the schedule data
+		const awayScore = awayTeam.score || 0;
+		const homeScore = homeTeam.score || 0;
+
+		// Build a simple inning list (since we don't have detailed inning data)
+		const inningList = Array.from({ length: 9 }, (_, i) => ({ 
+			inning: i + 1,
+			away: 0,
+			home: 0
+		}));
 
 		return {
 			game_id: gameId,
@@ -219,12 +259,12 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 					abbreviation: homeCodeFromName,
 				},
 				game_date_str: date,
-				location: gameInfo.venue?.name || 'Stadium',
-				inning_list: Array.from({ length: 9 }, (_, i) => ({ inning: i + 1 })),
-				is_postponed: gameInfo.status?.detailedState === 'Postponed',
-				is_suspended: gameInfo.status?.detailedState === 'Suspended',
+				location: gameData.venue?.name || 'Stadium',
+				inning_list: inningList,
+				is_postponed: status.detailedState === 'Postponed',
+				is_suspended: status.detailedState === 'Suspended',
 			},
-			svg_content: generateSimpleSVG(gameData),
+			svg_content: generateDetailedSVGFromSchedule(gameData, awayCodeFromName, homeCodeFromName),
 			success: true,
 		};
 	} catch (error) {
@@ -279,7 +319,157 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 	}
 }
 
-// Simple SVG generator for demonstration
+// SVG generator for schedule data
+function generateDetailedSVGFromSchedule(gameData: any, awayCode: string, homeCode: string): string {
+	const teams = gameData.teams || {};
+	const awayTeam = teams.away || {};
+	const homeTeam = teams.home || {};
+	const gameInfo = gameData.game || {};
+	const status = gameData.status || {};
+
+	const awayTeamName = awayTeam.team?.name || 'Away';
+	const homeTeamName = homeTeam.team?.name || 'Home';
+	const awayScore = awayTeam.score || 0;
+	const homeScore = homeTeam.score || 0;
+	const gameStatus = status.detailedState || 'Unknown';
+
+	return `
+		<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+			<rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
+			
+			<!-- Header -->
+			<text x="400" y="30" text-anchor="middle" font-size="20" font-weight="bold">
+				${awayTeamName} (${awayCode}) vs ${homeTeamName} (${homeCode})
+			</text>
+			
+			<!-- Game Info -->
+			<text x="400" y="55" text-anchor="middle" font-size="16">
+				${gameData.venue?.name || 'Stadium'} - ${gameData.gameDate ? new Date(gameData.gameDate).toLocaleDateString() : ''}
+			</text>
+			
+			<!-- Current Score -->
+			<text x="400" y="80" text-anchor="middle" font-size="18" font-weight="bold">
+				Final Score: ${awayCode} ${awayScore} - ${homeCode} ${homeScore}
+			</text>
+			
+			<!-- Game Status -->
+			<text x="400" y="105" text-anchor="middle" font-size="14">
+				Status: ${gameStatus}
+			</text>
+			
+			<!-- Score Summary -->
+			<text x="400" y="150" text-anchor="middle" font-size="16" font-weight="bold">
+				Game Summary
+			</text>
+			
+			<text x="400" y="180" text-anchor="middle" font-size="14">
+				${awayTeamName}: ${awayScore} runs
+			</text>
+			
+			<text x="400" y="200" text-anchor="middle" font-size="14">
+				${homeTeamName}: ${homeScore} runs
+			</text>
+			
+			<!-- Winner -->
+			<text x="400" y="240" text-anchor="middle" font-size="16" font-weight="bold" fill="${awayScore > homeScore ? 'blue' : 'red'}">
+				Winner: ${awayScore > homeScore ? awayTeamName : homeTeamName}
+			</text>
+			
+			<!-- Footer -->
+			<text x="400" y="550" text-anchor="middle" font-size="12" fill="gray">
+				Generated from MLB API - For detailed inning-by-inning scorecard, use the Python baseball library
+			</text>
+		</svg>
+	`;
+}
+
+// Detailed SVG generator with actual game data
+function generateDetailedSVG(gameData: any, awayCode: string, homeCode: string): string {
+	const gameInfo = gameData.gameData || {};
+	const liveData = gameData.liveData || {};
+	const teams = gameInfo.teams || {};
+	const awayTeam = teams.away || {};
+	const homeTeam = teams.home || {};
+	const linescore = liveData.linescore || {};
+
+	const awayTeamName = awayTeam.team?.name || 'Away';
+	const homeTeamName = homeTeam.team?.name || 'Home';
+	const awayScore = awayTeam.score || 0;
+	const homeScore = homeTeam.score || 0;
+	const status = gameInfo.status?.detailedState || 'Unknown';
+	const currentInning = linescore.currentInning || '';
+	const inningState = linescore.inningState || '';
+
+	// Build inning-by-inning score table
+	let inningRows = '';
+	let awayTotal = 0;
+	let homeTotal = 0;
+
+	if (linescore.innings && linescore.innings.length > 0) {
+		linescore.innings.forEach((inning: any, index: number) => {
+			const awayRuns = inning.away?.runs || 0;
+			const homeRuns = inning.home?.runs || 0;
+			awayTotal += awayRuns;
+			homeTotal += homeRuns;
+			
+			inningRows += `
+				<text x="100" y="${120 + index * 25}" font-size="14">${inning.num}</text>
+				<text x="200" y="${120 + index * 25}" font-size="14" text-anchor="middle">${awayRuns}</text>
+				<text x="300" y="${120 + index * 25}" font-size="14" text-anchor="middle">${homeRuns}</text>
+			`;
+		});
+	}
+
+	// Add totals row
+	const totalRowY = 120 + (linescore.innings?.length || 0) * 25 + 10;
+	inningRows += `
+		<line x1="80" y1="${totalRowY - 5}" x2="320" y2="${totalRowY - 5}" stroke="black" stroke-width="1"/>
+		<text x="100" y="${totalRowY + 15}" font-size="14" font-weight="bold">Total</text>
+		<text x="200" y="${totalRowY + 15}" font-size="14" text-anchor="middle" font-weight="bold">${awayTotal}</text>
+		<text x="300" y="${totalRowY + 15}" font-size="14" text-anchor="middle" font-weight="bold">${homeTotal}</text>
+	`;
+
+	return `
+		<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+			<rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
+			
+			<!-- Header -->
+			<text x="400" y="30" text-anchor="middle" font-size="20" font-weight="bold">
+				${awayTeamName} (${awayCode}) vs ${homeTeamName} (${homeCode})
+			</text>
+			
+			<!-- Game Info -->
+			<text x="400" y="55" text-anchor="middle" font-size="16">
+				${gameInfo.venue?.name || 'Stadium'} - ${gameInfo.game?.gameDate ? new Date(gameInfo.game.gameDate).toLocaleDateString() : ''}
+			</text>
+			
+			<!-- Current Score -->
+			<text x="400" y="80" text-anchor="middle" font-size="18" font-weight="bold">
+				Score: ${awayCode} ${awayScore} - ${homeCode} ${homeScore}
+			</text>
+			
+			<!-- Game Status -->
+			<text x="400" y="105" text-anchor="middle" font-size="14">
+				Status: ${status} ${currentInning ? `- ${inningState} ${currentInning}` : ''}
+			</text>
+			
+			<!-- Scorecard Table Header -->
+			<text x="100" y="115" font-size="14" font-weight="bold">Inning</text>
+			<text x="200" y="115" font-size="14" text-anchor="middle" font-weight="bold">${awayCode}</text>
+			<text x="300" y="115" font-size="14" text-anchor="middle" font-weight="bold">${homeCode}</text>
+			
+			<!-- Inning-by-inning scores -->
+			${inningRows}
+			
+			<!-- Footer -->
+			<text x="400" y="550" text-anchor="middle" font-size="12" fill="gray">
+				Generated from MLB API - For detailed scorecard, use the Python baseball library
+			</text>
+		</svg>
+	`;
+}
+
+// Simple SVG generator for demonstration (fallback)
 function generateSimpleSVG(gameData: any): string {
 	const gameInfo = gameData.gameData || {};
 	const teams = gameInfo.teams || {};
@@ -294,23 +484,23 @@ function generateSimpleSVG(gameData: any): string {
 	const homeCode = TEAM_ABBREVIATIONS[homeTeamName] || 'HOM';
 
 	return `
-		<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
-			<rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
-			<text x="400" y="50" text-anchor="middle" font-size="24" font-weight="bold">
+      <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+        <rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
+        <text x="400" y="50" text-anchor="middle" font-size="24" font-weight="bold">
 				${awayTeamName} (${awayCode}) vs ${homeTeamName} (${homeCode})
-			</text>
+        </text>
 			<text x="400" y="100" text-anchor="middle" font-size="18">
 				Score: ${linescore.teams?.away?.runs || 0} - ${linescore.teams?.home?.runs || 0}
-			</text>
+        </text>
 			<text x="400" y="150" text-anchor="middle" font-size="16">
 				Status: ${gameInfo.status?.detailedState || 'Unknown'}
-			</text>
+        </text>
 			<text x="400" y="200" text-anchor="middle" font-size="14">
 				This is a simplified scorecard. For full functionality, 
 				the Python baseball library would be used to generate detailed SVG.
-			</text>
-		</svg>
-	`;
+        </text>
+      </svg>
+    `;
 }
 
 export async function getGameSVG(gameId: string): Promise<string> {
