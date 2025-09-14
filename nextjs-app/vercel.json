@@ -1,0 +1,15 @@
+{
+	"functions": {
+		"app/api/**/*.ts": {
+			"maxDuration": 30
+		}
+	},
+	"env": {
+		"BASEBALL_LIB_PATH": "../baseball"
+	},
+	"build": {
+		"env": {
+			"BASEBALL_LIB_PATH": "../baseball"
+		}
+	}
+}
