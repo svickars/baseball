@@ -11,5 +11,8 @@
 		"env": {
 			"BASEBALL_LIB_PATH": "../baseball"
 		}
-	}
+	},
+	"buildCommand": "npm run build",
+	"outputDirectory": ".next",
+	"installCommand": "npm install && pip3 install requests python-dateutil pytz"
 }

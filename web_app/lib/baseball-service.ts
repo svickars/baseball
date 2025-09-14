@@ -1,89 +1,33 @@
 import { Game, GameData } from '@/types';
-import { parse } from 'date-fns';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
 
-// This will be the interface to your existing baseball library
-// We'll need to adapt this based on how your library works
+const execAsync = promisify(exec);
 
 export async function getGamesForDate(date: string): Promise<Game[]> {
 	try {
-		// For now, we'll use a direct HTTP approach to the MLB API
-		// This matches what your Flask app was doing
+		// Use the Python bridge to get games from your baseball library
+		const bridgePath = path.join(process.cwd(), 'lib', 'baseball_bridge.py');
+		const command = `python3 "${bridgePath}" get_games "${date}"`;
 
-		// Parse date string (YYYY-MM-DD format)
-		const dateObj = parse(date, 'yyyy-MM-dd', new Date());
+		const { stdout, stderr } = await execAsync(command);
 
-		// Use the MLB API directly (same as your Flask app)
-		const allGamesUrl = `http://statsapi.mlb.com/api/v1/schedule/games/?sportId=1&startDate=${dateObj.getFullYear()}-${String(
-			dateObj.getMonth() + 1
-		).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}&endDate=${dateObj.getFullYear()}-${String(
-			dateObj.getMonth() + 1
-		).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-
-		const response = await fetch(allGamesUrl);
-		const allGamesDict = await response.json();
-
-		const gamesData: Game[] = [];
-
-		if (allGamesDict.dates && allGamesDict.dates.length > 0) {
-			for (const gameData of allGamesDict.dates[0].games) {
-				const gamePk = gameData.gamePk;
-
-				// Get detailed game data
-				const gameUrl = `http://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`;
-				const gameResponse = await fetch(gameUrl);
-				const gameDict = await gameResponse.json();
-
-				// Extract game information
-				const gameInfo = gameDict.gameData || {};
-				const teams = gameInfo.teams || {};
-				const awayTeam = teams.away || {};
-				const homeTeam = teams.home || {};
-				const gameDetails = gameInfo.game || {};
-				const status = gameData.status || {};
-
-				// Format start time
-				let startTime = gameData.gameDate || '';
-				if (startTime) {
-					try {
-						const dt = new Date(startTime);
-						startTime = dt.toLocaleTimeString('en-US', {
-							hour: 'numeric',
-							minute: '2-digit',
-							timeZoneName: 'short',
-						});
-					} catch (error) {
-						// Keep original format if parsing fails
-					}
-				}
-
-				// Create game object
-				const game: Game = {
-					id: `${date}-${awayTeam.abbreviation || ''}-${homeTeam.abbreviation || ''}-${gameDetails.gameNumber || 1}`,
-					away_team: awayTeam.teamName || '',
-					home_team: homeTeam.teamName || '',
-					away_code: awayTeam.abbreviation || '',
-					home_code: homeTeam.abbreviation || '',
-					game_number: gameDetails.gameNumber || 1,
-					start_time: startTime,
-					location: `${gameData.venue?.name || ''}, ${gameData.venue?.city || ''}`,
-					status: status.detailedState || 'Unknown',
-					game_pk: gamePk,
-					is_live: status.codedGameState === 'I' || status.codedGameState === 'S',
-					inning: gameData.linescore?.currentInning || '',
-					inning_state: gameData.linescore?.inningState || '',
-					away_score: gameData.linescore?.teams?.away?.runs || 0,
-					home_score: gameData.linescore?.teams?.home?.runs || 0,
-				};
-
-				gamesData.push(game);
-			}
+		if (stderr) {
+			console.error('Python bridge stderr:', stderr);
 		}
 
-		return gamesData;
+		const result = JSON.parse(stdout);
+
+		if (!result.success) {
+			throw new Error(result.error || 'Failed to fetch games');
+		}
+
+		return result.games;
 	} catch (error) {
 		console.error(`Error fetching games for ${date}:`, error);
 
-		// Fallback to mock data if API fails
+		// Fallback to mock data if Python bridge fails
 		return [
 			{
 				id: `${date}-HOU-LAD-1`,
@@ -106,21 +50,37 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 
 export async function getGameDetails(gameId: string): Promise<GameData> {
 	try {
-		// Parse game_id (format: YYYY-MM-DD-AWAY-HOME-GAME)
-		const parts = gameId.split('-');
-		if (parts.length !== 6) {
-			throw new Error('Invalid game ID format');
+		// Use the Python bridge to get game details from your baseball library
+		const bridgePath = path.join(process.cwd(), 'lib', 'baseball_bridge.py');
+		const command = `python3 "${bridgePath}" get_game "${gameId}"`;
+
+		const { stdout, stderr } = await execAsync(command);
+
+		if (stderr) {
+			console.error('Python bridge stderr:', stderr);
 		}
 
-		const dateStr = `${parts[0]}-${parts[1]}-${parts[2]}`;
+		const result = JSON.parse(stdout);
+
+		if (!result.success) {
+			throw new Error(result.error || 'Failed to fetch game details');
+		}
+
+		return {
+			game_id: result.game_id,
+			game_data: result.game_data,
+			svg_content: result.svg_content,
+			success: true,
+		};
+	} catch (error) {
+		console.error(`Error fetching game ${gameId}:`, error);
+
+		// Fallback to mock data if Python bridge fails
+		const parts = gameId.split('-');
+		const dateStr = parts.slice(0, 3).join('-');
 		const awayCode = parts[3];
 		const homeCode = parts[4];
-		const gameNumber = parseInt(parts[5]);
 
-		// For now, we'll create a mock response that matches your existing structure
-		// In production, you would integrate with your baseball library here
-
-		// Mock game data structure that matches your existing format
 		const mockGameData = {
 			away_team: {
 				name: `${awayCode} Team`,
@@ -137,7 +97,6 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 			is_suspended: false,
 		};
 
-		// Mock SVG content - in production this would come from your baseball library
 		const mockSvgContent = `
       <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
         <rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
@@ -162,28 +121,38 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 			svg_content: mockSvgContent,
 			success: true,
 		};
-	} catch (error) {
-		console.error(`Error fetching game ${gameId}:`, error);
-		throw error;
 	}
 }
 
 export async function getGameSVG(gameId: string): Promise<string> {
 	try {
-		// Parse game_id
-		const parts = gameId.split('-');
-		if (parts.length !== 6) {
-			throw new Error('Invalid game ID format');
+		// Use the Python bridge to get SVG from your baseball library
+		const bridgePath = path.join(process.cwd(), 'lib', 'baseball_bridge.py');
+		const command = `python3 "${bridgePath}" get_svg "${gameId}"`;
+
+		const { stdout, stderr } = await execAsync(command);
+
+		if (stderr) {
+			console.error('Python bridge stderr:', stderr);
 		}
 
-		const dateStr = `${parts[0]}-${parts[1]}-${parts[2]}`;
+		const result = JSON.parse(stdout);
+
+		if (!result.success) {
+			throw new Error(result.error || 'Failed to fetch game SVG');
+		}
+
+		return result.svg_content;
+	} catch (error) {
+		console.error(`Error fetching game SVG ${gameId}:`, error);
+
+		// Fallback to mock SVG
+		const parts = gameId.split('-');
+		const dateStr = parts.slice(0, 3).join('-');
 		const awayCode = parts[3];
 		const homeCode = parts[4];
-		const gameNumber = parseInt(parts[5]);
 
-		// For now, return a mock SVG
-		// In production, you would integrate with your baseball library here
-		const mockSvgContent = `
+		return `
       <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
         <rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
         <text x="400" y="50" text-anchor="middle" font-size="24" font-weight="bold">
@@ -200,10 +169,5 @@ export async function getGameSVG(gameId: string): Promise<string> {
         </text>
       </svg>
     `;
-
-		return mockSvgContent;
-	} catch (error) {
-		console.error(`Error fetching game SVG ${gameId}:`, error);
-		throw error;
 	}
 }

@@ -53,7 +53,7 @@ export function useBaseballApp() {
 					stopAutoRefresh();
 				}
 			} else {
-				throw new Error(response.error || 'Failed to load games');
+				throw new Error('Failed to load games');
 			}
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to load games';
@@ -75,7 +75,7 @@ export function useBaseballApp() {
 				setView('scorecard');
 				startLiveDataCollection(gameId);
 			} else {
-				throw new Error(response.error || 'Failed to load game');
+				throw new Error('Failed to load game');
 			}
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to load game';
@@ -184,7 +184,7 @@ export function useBaseballApp() {
 					const newBuffer = new Map(prev);
 					let hasUpdates = false;
 
-					for (const [id, liveData] of newBuffer.entries()) {
+					newBuffer.forEach((liveData, id) => {
 						const timeSinceData = currentTime - liveData.timestamp;
 
 						if (timeSinceData >= delayMs) {
@@ -193,7 +193,7 @@ export function useBaseballApp() {
 							newBuffer.delete(id);
 							hasUpdates = true;
 						}
-					}
+					});
 
 					return hasUpdates ? newBuffer : prev;
 				});
