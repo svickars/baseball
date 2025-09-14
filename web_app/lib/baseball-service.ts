@@ -3,6 +3,40 @@ import { Game, GameData } from '@/types';
 // MLB API base URL
 const MLB_API_BASE = 'https://statsapi.mlb.com/api/v1';
 
+// Team abbreviation mapping (since MLB API doesn't include abbreviations in schedule)
+const TEAM_ABBREVIATIONS: { [key: string]: string } = {
+	'Arizona Diamondbacks': 'ARI',
+	'Atlanta Braves': 'ATL',
+	'Baltimore Orioles': 'BAL',
+	'Boston Red Sox': 'BOS',
+	'Chicago Cubs': 'CHC',
+	'Chicago White Sox': 'CWS',
+	'Cincinnati Reds': 'CIN',
+	'Cleveland Guardians': 'CLE',
+	'Colorado Rockies': 'COL',
+	'Detroit Tigers': 'DET',
+	'Houston Astros': 'HOU',
+	'Kansas City Royals': 'KC',
+	'Los Angeles Angels': 'LAA',
+	'Los Angeles Dodgers': 'LAD',
+	'Miami Marlins': 'MIA',
+	'Milwaukee Brewers': 'MIL',
+	'Minnesota Twins': 'MIN',
+	'New York Mets': 'NYM',
+	'New York Yankees': 'NYY',
+	'Oakland Athletics': 'OAK',
+	'Philadelphia Phillies': 'PHI',
+	'Pittsburgh Pirates': 'PIT',
+	'San Diego Padres': 'SD',
+	'San Francisco Giants': 'SF',
+	'Seattle Mariners': 'SEA',
+	'St. Louis Cardinals': 'STL',
+	'Tampa Bay Rays': 'TB',
+	'Texas Rangers': 'TEX',
+	'Toronto Blue Jays': 'TOR',
+	'Washington Nationals': 'WSH',
+};
+
 export async function getGamesForDate(date: string): Promise<Game[]> {
 	try {
 		// Parse the date to get year, month, day
@@ -27,11 +61,10 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 		if (data.dates && data.dates.length > 0) {
 			for (const gameData of data.dates[0].games) {
 				const gamePk = gameData.gamePk;
-				const gameInfo = gameData.gameData || {};
-				const teams = gameInfo.teams || {};
+				const teams = gameData.teams || {};
 				const awayTeam = teams.away || {};
 				const homeTeam = teams.home || {};
-				const gameDetails = gameInfo.game || {};
+				const gameDetails = gameData.game || {};
 				const status = gameData.status || {};
 
 				// Format start time
@@ -49,12 +82,17 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 					}
 				}
 
+				const awayTeamName = awayTeam.team?.name || '';
+				const homeTeamName = homeTeam.team?.name || '';
+				const awayCode = TEAM_ABBREVIATIONS[awayTeamName] || '';
+				const homeCode = TEAM_ABBREVIATIONS[homeTeamName] || '';
+
 				const game: Game = {
-					id: `${date}-${awayTeam.abbreviation || ''}-${homeTeam.abbreviation || ''}-${gameDetails.gameNumber || 1}`,
-					away_team: awayTeam.teamName || '',
-					home_team: homeTeam.teamName || '',
-					away_code: awayTeam.abbreviation || '',
-					home_code: homeTeam.abbreviation || '',
+					id: `${date}-${awayCode}-${homeCode}-${gameDetails.gameNumber || 1}`,
+					away_team: awayTeamName,
+					home_team: homeTeamName,
+					away_code: awayCode,
+					home_code: homeCode,
 					game_number: gameDetails.gameNumber || 1,
 					start_time: startTime,
 					location: `${gameData.venue?.name || ''}, ${gameData.venue?.city || ''}`,
@@ -129,15 +167,14 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 
 		if (scheduleData.dates && scheduleData.dates.length > 0) {
 			for (const gameData of scheduleData.dates[0].games) {
-				const gameInfo = gameData.gameData || {};
-				const teams = gameInfo.teams || {};
+				const teams = gameData.teams || {};
 				const awayTeam = teams.away || {};
 				const homeTeam = teams.home || {};
-				const gameDetails = gameInfo.game || {};
+				const gameDetails = gameData.game || {};
 
 				if (
-					awayTeam.abbreviation === awayCode &&
-					homeTeam.abbreviation === homeCode &&
+					awayTeam.team?.abbreviation === awayCode &&
+					homeTeam.team?.abbreviation === homeCode &&
 					(gameDetails.gameNumber || 1) === gameNumber
 				) {
 					gamePk = gameData.gamePk;
@@ -165,16 +202,21 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 		const awayTeam = teams.away || {};
 		const homeTeam = teams.home || {};
 
+		const awayTeamName = awayTeam.team?.name || 'Away Team';
+		const homeTeamName = homeTeam.team?.name || 'Home Team';
+		const awayCodeFromName = TEAM_ABBREVIATIONS[awayTeamName] || 'AWY';
+		const homeCodeFromName = TEAM_ABBREVIATIONS[homeTeamName] || 'HOM';
+
 		return {
 			game_id: gameId,
 			game_data: {
 				away_team: {
-					name: awayTeam.teamName || 'Away Team',
-					abbreviation: awayTeam.abbreviation || 'AWY',
+					name: awayTeamName,
+					abbreviation: awayCodeFromName,
 				},
 				home_team: {
-					name: homeTeam.teamName || 'Home Team',
-					abbreviation: homeTeam.abbreviation || 'HOM',
+					name: homeTeamName,
+					abbreviation: homeCodeFromName,
 				},
 				game_date_str: date,
 				location: gameInfo.venue?.name || 'Stadium',
@@ -246,11 +288,16 @@ function generateSimpleSVG(gameData: any): string {
 	const liveData = gameData.liveData || {};
 	const linescore = liveData.linescore || {};
 
+	const awayTeamName = awayTeam.team?.name || 'Away';
+	const homeTeamName = homeTeam.team?.name || 'Home';
+	const awayCode = TEAM_ABBREVIATIONS[awayTeamName] || 'AWY';
+	const homeCode = TEAM_ABBREVIATIONS[homeTeamName] || 'HOM';
+
 	return `
 		<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
 			<rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
 			<text x="400" y="50" text-anchor="middle" font-size="24" font-weight="bold">
-				${awayTeam.teamName || 'Away'} vs ${homeTeam.teamName || 'Home'}
+				${awayTeamName} (${awayCode}) vs ${homeTeamName} (${homeCode})
 			</text>
 			<text x="400" y="100" text-anchor="middle" font-size="18">
 				Score: ${linescore.teams?.away?.runs || 0} - ${linescore.teams?.home?.runs || 0}
