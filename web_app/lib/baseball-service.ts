@@ -1,33 +1,81 @@
 import { Game, GameData } from '@/types';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import path from 'path';
 
-const execAsync = promisify(exec);
+// MLB API base URL
+const MLB_API_BASE = 'https://statsapi.mlb.com/api/v1';
 
 export async function getGamesForDate(date: string): Promise<Game[]> {
 	try {
-		// Use the Python bridge to get games from your baseball library
-		const bridgePath = path.join(process.cwd(), 'lib', 'baseball_bridge.py');
-		const command = `python3 "${bridgePath}" get_games "${date}"`;
+		// Parse the date to get year, month, day
+		const dateObj = new Date(date);
+		const year = dateObj.getFullYear();
+		const month = dateObj.getMonth() + 1; // JavaScript months are 0-indexed
+		const day = dateObj.getDate();
 
-		const { stdout, stderr } = await execAsync(command);
+		// Fetch games from MLB API
+		const response = await fetch(
+			`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}`
+		);
 
-		if (stderr) {
-			console.error('Python bridge stderr:', stderr);
+		if (!response.ok) {
+			throw new Error(`MLB API error: ${response.status}`);
 		}
 
-		const result = JSON.parse(stdout);
+		const data = await response.json();
 
-		if (!result.success) {
-			throw new Error(result.error || 'Failed to fetch games');
+		const games: Game[] = [];
+
+		if (data.dates && data.dates.length > 0) {
+			for (const gameData of data.dates[0].games) {
+				const gamePk = gameData.gamePk;
+				const gameInfo = gameData.gameData || {};
+				const teams = gameInfo.teams || {};
+				const awayTeam = teams.away || {};
+				const homeTeam = teams.home || {};
+				const gameDetails = gameInfo.game || {};
+				const status = gameData.status || {};
+
+				// Format start time
+				let startTime = gameData.gameDate || '';
+				if (startTime) {
+					try {
+						const dt = new Date(startTime);
+						startTime = dt.toLocaleTimeString('en-US', {
+							hour: 'numeric',
+							minute: '2-digit',
+							timeZoneName: 'short',
+						});
+					} catch (e) {
+						// Keep original format if parsing fails
+					}
+				}
+
+				const game: Game = {
+					id: `${date}-${awayTeam.abbreviation || ''}-${homeTeam.abbreviation || ''}-${gameDetails.gameNumber || 1}`,
+					away_team: awayTeam.teamName || '',
+					home_team: homeTeam.teamName || '',
+					away_code: awayTeam.abbreviation || '',
+					home_code: homeTeam.abbreviation || '',
+					game_number: gameDetails.gameNumber || 1,
+					start_time: startTime,
+					location: `${gameData.venue?.name || ''}, ${gameData.venue?.city || ''}`,
+					status: status.detailedState || 'Unknown',
+					game_pk: gamePk,
+					is_live: status.codedGameState === 'I' || status.codedGameState === 'S',
+					inning: gameData.linescore?.currentInning || '',
+					inning_state: gameData.linescore?.inningState || '',
+					away_score: gameData.linescore?.teams?.away?.runs || 0,
+					home_score: gameData.linescore?.teams?.home?.runs || 0,
+				};
+
+				games.push(game);
+			}
 		}
 
-		return result.games;
+		return games;
 	} catch (error) {
 		console.error(`Error fetching games for ${date}:`, error);
 
-		// Fallback to mock data if Python bridge fails
+		// Fallback to mock data if API fails
 		return [
 			{
 				id: `${date}-HOU-LAD-1`,
@@ -50,32 +98,97 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 
 export async function getGameDetails(gameId: string): Promise<GameData> {
 	try {
-		// Use the Python bridge to get game details from your baseball library
-		const bridgePath = path.join(process.cwd(), 'lib', 'baseball_bridge.py');
-		const command = `python3 "${bridgePath}" get_game "${gameId}"`;
-
-		const { stdout, stderr } = await execAsync(command);
-
-		if (stderr) {
-			console.error('Python bridge stderr:', stderr);
+		// Parse game ID to extract gamePk
+		// Format: YYYY-MM-DD-AWAY-HOME-GAME_NUMBER
+		const parts = gameId.split('-');
+		if (parts.length < 6) {
+			throw new Error('Invalid game ID format');
 		}
 
-		const result = JSON.parse(stdout);
+		const date = `${parts[0]}-${parts[1]}-${parts[2]}`;
+		const awayCode = parts[3];
+		const homeCode = parts[4];
+		const gameNumber = parseInt(parts[5]);
 
-		if (!result.success) {
-			throw new Error(result.error || 'Failed to fetch game details');
+		// First, get the gamePk from the schedule
+		const dateObj = new Date(date);
+		const year = dateObj.getFullYear();
+		const month = dateObj.getMonth() + 1;
+		const day = dateObj.getDate();
+
+		const scheduleResponse = await fetch(
+			`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}`
+		);
+
+		if (!scheduleResponse.ok) {
+			throw new Error(`MLB API error: ${scheduleResponse.status}`);
 		}
+
+		const scheduleData = await scheduleResponse.json();
+		let gamePk = null;
+
+		if (scheduleData.dates && scheduleData.dates.length > 0) {
+			for (const gameData of scheduleData.dates[0].games) {
+				const gameInfo = gameData.gameData || {};
+				const teams = gameInfo.teams || {};
+				const awayTeam = teams.away || {};
+				const homeTeam = teams.home || {};
+				const gameDetails = gameInfo.game || {};
+
+				if (
+					awayTeam.abbreviation === awayCode &&
+					homeTeam.abbreviation === homeCode &&
+					(gameDetails.gameNumber || 1) === gameNumber
+				) {
+					gamePk = gameData.gamePk;
+					break;
+				}
+			}
+		}
+
+		if (!gamePk) {
+			throw new Error('Game not found in schedule');
+		}
+
+		// Get detailed game data
+		const gameResponse = await fetch(`${MLB_API_BASE}/game/${gamePk}/feed/live`);
+		if (!gameResponse.ok) {
+			throw new Error(`MLB API error: ${gameResponse.status}`);
+		}
+
+		const gameData = await gameResponse.json();
+
+		// For now, return a simplified game data structure
+		// In a full implementation, you'd process this data similar to your Python library
+		const gameInfo = gameData.gameData || {};
+		const teams = gameInfo.teams || {};
+		const awayTeam = teams.away || {};
+		const homeTeam = teams.home || {};
 
 		return {
-			game_id: result.game_id,
-			game_data: result.game_data,
-			svg_content: result.svg_content,
+			game_id: gameId,
+			game_data: {
+				away_team: {
+					name: awayTeam.teamName || 'Away Team',
+					abbreviation: awayTeam.abbreviation || 'AWY',
+				},
+				home_team: {
+					name: homeTeam.teamName || 'Home Team',
+					abbreviation: homeTeam.abbreviation || 'HOM',
+				},
+				game_date_str: date,
+				location: gameInfo.venue?.name || 'Stadium',
+				inning_list: Array.from({ length: 9 }, (_, i) => ({ inning: i + 1 })),
+				is_postponed: gameInfo.status?.detailedState === 'Postponed',
+				is_suspended: gameInfo.status?.detailedState === 'Suspended',
+			},
+			svg_content: generateSimpleSVG(gameData),
 			success: true,
 		};
 	} catch (error) {
-		console.error(`Error fetching game ${gameId}:`, error);
+		console.error(`Error fetching game details for ${gameId}:`, error);
 
-		// Fallback to mock data if Python bridge fails
+		// Fallback to mock data if API fails
 		const parts = gameId.split('-');
 		const dateStr = parts.slice(0, 3).join('-');
 		const awayCode = parts[3];
@@ -124,50 +237,105 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 	}
 }
 
+// Simple SVG generator for demonstration
+function generateSimpleSVG(gameData: any): string {
+	const gameInfo = gameData.gameData || {};
+	const teams = gameInfo.teams || {};
+	const awayTeam = teams.away || {};
+	const homeTeam = teams.home || {};
+	const liveData = gameData.liveData || {};
+	const linescore = liveData.linescore || {};
+
+	return `
+		<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+			<rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
+			<text x="400" y="50" text-anchor="middle" font-size="24" font-weight="bold">
+				${awayTeam.teamName || 'Away'} vs ${homeTeam.teamName || 'Home'}
+			</text>
+			<text x="400" y="100" text-anchor="middle" font-size="18">
+				Score: ${linescore.teams?.away?.runs || 0} - ${linescore.teams?.home?.runs || 0}
+			</text>
+			<text x="400" y="150" text-anchor="middle" font-size="16">
+				Status: ${gameInfo.status?.detailedState || 'Unknown'}
+			</text>
+			<text x="400" y="200" text-anchor="middle" font-size="14">
+				This is a simplified scorecard. For full functionality, 
+				the Python baseball library would be used to generate detailed SVG.
+			</text>
+		</svg>
+	`;
+}
+
 export async function getGameSVG(gameId: string): Promise<string> {
 	try {
-		// Use the Python bridge to get SVG from your baseball library
-		const bridgePath = path.join(process.cwd(), 'lib', 'baseball_bridge.py');
-		const command = `python3 "${bridgePath}" get_svg "${gameId}"`;
-
-		const { stdout, stderr } = await execAsync(command);
-
-		if (stderr) {
-			console.error('Python bridge stderr:', stderr);
-		}
-
-		const result = JSON.parse(stdout);
-
-		if (!result.success) {
-			throw new Error(result.error || 'Failed to fetch game SVG');
-		}
-
-		return result.svg_content;
+		// Get game details first, then extract SVG
+		const gameDetails = await getGameDetails(gameId);
+		return gameDetails.svg_content;
 	} catch (error) {
-		console.error(`Error fetching game SVG ${gameId}:`, error);
-
-		// Fallback to mock SVG
-		const parts = gameId.split('-');
-		const dateStr = parts.slice(0, 3).join('-');
-		const awayCode = parts[3];
-		const homeCode = parts[4];
-
-		return `
-      <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
-        <rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
-        <text x="400" y="50" text-anchor="middle" font-size="24" font-weight="bold">
-          ${awayCode} vs ${homeCode}
-        </text>
-        <text x="400" y="100" text-anchor="middle" font-size="16">
-          ${dateStr}
-        </text>
-        <text x="400" y="300" text-anchor="middle" font-size="18">
-          SVG Scorecard
-        </text>
-        <text x="400" y="350" text-anchor="middle" font-size="14" fill="gray">
-          Integration with baseball library needed
-        </text>
-      </svg>
-    `;
+		console.error(`Error fetching SVG for ${gameId}:`, error);
+		throw error;
 	}
+}
+
+export async function getTeams(): Promise<{ teams: { code: string; name: string }[] }> {
+	try {
+		// For now, return a static list of MLB teams
+		// In a full implementation, this could fetch from the MLB API
+		const teams = [
+			{ code: 'ARI', name: 'Arizona Diamondbacks' },
+			{ code: 'ATL', name: 'Atlanta Braves' },
+			{ code: 'BAL', name: 'Baltimore Orioles' },
+			{ code: 'BOS', name: 'Boston Red Sox' },
+			{ code: 'CHC', name: 'Chicago Cubs' },
+			{ code: 'CWS', name: 'Chicago White Sox' },
+			{ code: 'CIN', name: 'Cincinnati Reds' },
+			{ code: 'CLE', name: 'Cleveland Guardians' },
+			{ code: 'COL', name: 'Colorado Rockies' },
+			{ code: 'DET', name: 'Detroit Tigers' },
+			{ code: 'HOU', name: 'Houston Astros' },
+			{ code: 'KC', name: 'Kansas City Royals' },
+			{ code: 'LAA', name: 'Los Angeles Angels' },
+			{ code: 'LAD', name: 'Los Angeles Dodgers' },
+			{ code: 'MIA', name: 'Miami Marlins' },
+			{ code: 'MIL', name: 'Milwaukee Brewers' },
+			{ code: 'MIN', name: 'Minnesota Twins' },
+			{ code: 'NYM', name: 'New York Mets' },
+			{ code: 'NYY', name: 'New York Yankees' },
+			{ code: 'OAK', name: 'Oakland Athletics' },
+			{ code: 'PHI', name: 'Philadelphia Phillies' },
+			{ code: 'PIT', name: 'Pittsburgh Pirates' },
+			{ code: 'SD', name: 'San Diego Padres' },
+			{ code: 'SF', name: 'San Francisco Giants' },
+			{ code: 'SEA', name: 'Seattle Mariners' },
+			{ code: 'STL', name: 'St. Louis Cardinals' },
+			{ code: 'TB', name: 'Tampa Bay Rays' },
+			{ code: 'TEX', name: 'Texas Rangers' },
+			{ code: 'TOR', name: 'Toronto Blue Jays' },
+			{ code: 'WSH', name: 'Washington Nationals' },
+		];
+
+		return { teams };
+	} catch (error) {
+		console.error('Error fetching teams:', error);
+		return { teams: [] };
+	}
+}
+
+export async function getTodayGames(): Promise<Game[]> {
+	try {
+		const today = new Date();
+		const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+		return await getGamesForDate(dateStr);
+	} catch (error) {
+		console.error("Error fetching today's games:", error);
+		return [];
+	}
+}
+
+export async function getHealth(): Promise<{ status: string; timestamp: string; version: string }> {
+	return {
+		status: 'healthy',
+		timestamp: new Date().toISOString(),
+		version: '1.0.0',
+	};
 }
