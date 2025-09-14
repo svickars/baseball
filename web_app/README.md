@@ -35,7 +35,7 @@ A modern React/Next.js web application for viewing baseball scorecards with live
 1. **Install dependencies**:
 
    ```bash
-   cd nextjs-app
+   cd web_app
    npm install
    ```
 
@@ -83,7 +83,7 @@ npm run type-check
 ## Project Structure
 
 ```
-nextjs-app/
+web_app/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API routes
 │   ├── globals.css        # Global styles

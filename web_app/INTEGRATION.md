@@ -184,7 +184,7 @@ Update `vercel.json`:
 1. **Test locally**:
 
    ```bash
-   cd nextjs-app
+   cd web_app
    npm run dev
    ```
 

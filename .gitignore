@@ -3,4 +3,14 @@ __pycache__
 baseball.egg-info
 dist
 *.pyc
+venv
+output
+todays_games
+
+# Next.js web app
+web_app/node_modules/
+web_app/.next/
+web_app/out/
+web_app/build/
+web_app/dist/
 

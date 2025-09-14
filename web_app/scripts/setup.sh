@@ -6,7 +6,7 @@ echo "🏟️  Setting up Baseball Scorecard Viewer..."
 
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then
-    echo "❌ Error: Please run this script from the nextjs-app directory"
+    echo "❌ Error: Please run this script from the web_app directory"
     exit 1
 fi
 
