@@ -2,11 +2,6 @@
 	"buildCommand": "cd web_app && npm run build",
 	"outputDirectory": "web_app/.next",
 	"installCommand": "cd web_app && npm install && pip3 install requests python-dateutil pytz",
-	"functions": {
-		"web_app/app/api/**/*.ts": {
-			"maxDuration": 30
-		}
-	},
 	"env": {
 		"BASEBALL_LIB_PATH": "baseball"
 	},
