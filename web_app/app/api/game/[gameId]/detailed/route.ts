@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 		// Use the Baseball library integration script
 		const pythonScript = path.join(process.cwd(), 'lib', 'baseball_json_integration.py');
 
-		return new Promise((resolve) => {
+		return new Promise<NextResponse>((resolve) => {
 			const python = spawn('python3', [pythonScript, gameId]);
 			let output = '';
 			let error = '';

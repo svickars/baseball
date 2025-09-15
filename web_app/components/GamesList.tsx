@@ -15,13 +15,13 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 	if (games.length === 0) {
 		return (
 			<section className="my-8">
-				<h2 className="text-xl font-semibold text-secondary-900 mb-6">Games for {formatDate(selectedDate)}</h2>
-				<div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-12 text-center">
-					<div className="w-16 h-16 bg-secondary-100 rounded-full flex items-center justify-center mx-auto mb-4">
-						<Clock className="w-8 h-8 text-secondary-500" />
+				<h2 className="text-xl font-semibold text-accent-900 mb-6">Games for {formatDate(selectedDate)}</h2>
+				<div className="bg-primary-50 rounded-xl shadow-sm border border-primary-200 p-12 text-center">
+					<div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
+						<Clock className="w-8 h-8 text-primary-500" />
 					</div>
-					<h3 className="text-lg font-semibold text-secondary-900 mb-2">No games found</h3>
-					<p className="text-secondary-600">No games were scheduled for {formatDate(selectedDate)}.</p>
+					<h3 className="text-lg font-semibold text-accent-900 mb-2">No games found</h3>
+					<p className="text-primary-600">No games were scheduled for {formatDate(selectedDate)}.</p>
 				</div>
 			</section>
 		);
@@ -29,7 +29,7 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 
 	return (
 		<section className="my-8">
-			<h2 className="text-xl font-semibold text-secondary-900 mb-6">Games for {formatDate(selectedDate)}</h2>
+			<h2 className="text-xl font-semibold text-accent-900 mb-6">Games for {formatDate(selectedDate)}</h2>
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 				{games.map((game) => {
 					const isLive = isGameLive(game);
@@ -44,18 +44,19 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 								{isLive && <span className="live-indicator">🔴 LIVE</span>}
 							</div>
 
-							<div className="text-secondary-600 mb-3">
+							<div className="text-primary-600 mb-3">
 								{game.away_code} vs {game.home_code}
 							</div>
 
 							{game.away_score !== undefined && game.home_score !== undefined && (
-								<div className="text-center text-lg font-semibold text-secondary-900 mb-3">
-									{game.away_code} {game.away_score} - {game.home_score} {game.home_code}
+								<div className="text-center text-lg font-semibold text-accent-900 mb-3">
+									{game.away_code} <span className="font-mono">{game.away_score}</span> -{' '}
+									<span className="font-mono">{game.home_score}</span> {game.home_code}
 								</div>
 							)}
 
 							{isLive && game.inning && (
-								<div className="text-center text-success-600 font-medium mb-3">
+								<div className="text-center text-success-600 font-medium mb-3 font-mono">
 									{game.inning}
 									{game.inning_state ? ` ${game.inning_state}` : ''}
 								</div>

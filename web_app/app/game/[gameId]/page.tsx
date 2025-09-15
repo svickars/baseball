@@ -63,7 +63,7 @@ export default function GameDetailPage() {
 
 	if (loading) {
 		return (
-			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
+			<div className="flex items-center justify-center py-16">
 				<LoadingSpinner />
 			</div>
 		);
@@ -71,7 +71,7 @@ export default function GameDetailPage() {
 
 	if (error) {
 		return (
-			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
+			<div className="flex items-center justify-center py-16">
 				<ErrorMessage message={error} />
 			</div>
 		);
@@ -79,14 +79,14 @@ export default function GameDetailPage() {
 
 	if (!gameData) {
 		return (
-			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
+			<div className="flex items-center justify-center py-16">
 				<ErrorMessage message="Game data not found" />
 			</div>
 		);
 	}
 
 	return (
-		<div className="min-h-screen bg-gray-50">
+		<div className="py-8">
 			<ModernScorecard gameData={gameData} gameId={gameId} />
 		</div>
 	);

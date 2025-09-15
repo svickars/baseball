@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Setup script for Baseball Scorecard Viewer Next.js app
+# Setup script for Caught Looking Next.js app
 
-echo "🏟️  Setting up Baseball Scorecard Viewer..."
+echo "🏟️  Setting up Caught Looking..."
 
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then

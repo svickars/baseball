@@ -214,6 +214,12 @@ export function useBaseballApp() {
 		setLiveDataBuffer(new Map());
 	}, []);
 
+	// Load games on mount with current date
+	useEffect(() => {
+		const today = new Date().toISOString().split('T')[0];
+		loadGames(today);
+	}, [loadGames]);
+
 	// Cleanup on unmount
 	useEffect(() => {
 		return () => {

@@ -8,69 +8,96 @@ module.exports = {
 	theme: {
 		extend: {
 			colors: {
+				// Vintage baseball color palette inspired by Eephus League
 				primary: {
-					50: '#eff6ff',
-					100: '#dbeafe',
-					200: '#bfdbfe',
-					300: '#93c5fd',
-					400: '#60a5fa',
-					500: '#3b82f6',
-					600: '#2563eb',
-					700: '#1d4ed8',
-					800: '#1e40af',
-					900: '#1e3a8a',
+					50: '#faf9f7', // Cream white
+					100: '#f5f4f2', // Warm off-white
+					200: '#e8e6e1', // Light beige
+					300: '#d4d0c7', // Muted beige
+					400: '#b8b2a6', // Soft brown
+					500: '#9c9485', // Medium brown
+					600: '#7a6f5e', // Rich brown
+					700: '#5d5344', // Dark brown
+					800: '#40382e', // Deep brown
+					900: '#2d251c', // Very dark brown
 				},
 				secondary: {
-					50: '#f8fafc',
-					100: '#f1f5f9',
-					200: '#e2e8f0',
-					300: '#cbd5e1',
-					400: '#94a3b8',
-					500: '#64748b',
-					600: '#475569',
-					700: '#334155',
-					800: '#1e293b',
-					900: '#0f172a',
+					50: '#fefdfb', // Pure cream
+					100: '#faf8f5', // Warm cream
+					200: '#f2ede6', // Light cream
+					300: '#e6ddd1', // Muted cream
+					400: '#d4c7b5', // Soft tan
+					500: '#c2b199', // Medium tan
+					600: '#a8957a', // Rich tan
+					700: '#8b7a63', // Dark tan
+					800: '#6b5d4c', // Deep tan
+					900: '#4a3f35', // Very dark tan
+				},
+				accent: {
+					50: '#f7f5f0', // Warm accent
+					100: '#ede8dd', // Light accent
+					200: '#d9d0bf', // Soft accent
+					300: '#c4b8a1', // Medium accent
+					400: '#a8957a', // Rich accent
+					500: '#8b7a63', // Dark accent
+					600: '#6b5d4c', // Deep accent
+					700: '#4a3f35', // Very dark accent
+					800: '#2d251c', // Darkest accent
+					900: '#1a1510', // Almost black
 				},
 				success: {
-					50: '#f0fdf4',
-					100: '#dcfce7',
-					200: '#bbf7d0',
-					300: '#86efac',
-					400: '#4ade80',
-					500: '#22c55e',
-					600: '#16a34a',
-					700: '#15803d',
-					800: '#166534',
-					900: '#14532d',
+					50: '#f0f9f0',
+					100: '#dcf2dc',
+					200: '#b8e5b8',
+					300: '#8dd18d',
+					400: '#5bb85b',
+					500: '#3a9d3a',
+					600: '#2d7a2d',
+					700: '#245f24',
+					800: '#1f4f1f',
+					900: '#1a3f1a',
 				},
 				warning: {
-					50: '#fffbeb',
-					100: '#fef3c7',
-					200: '#fde68a',
-					300: '#fcd34d',
-					400: '#fbbf24',
-					500: '#f59e0b',
-					600: '#d97706',
-					700: '#b45309',
-					800: '#92400e',
-					900: '#78350f',
+					50: '#fff8e1',
+					100: '#ffecb3',
+					200: '#ffd54f',
+					300: '#ffc107',
+					400: '#ffb300',
+					500: '#ff8f00',
+					600: '#ff6f00',
+					700: '#e65100',
+					800: '#bf360c',
+					900: '#8d1b00',
 				},
 				error: {
-					50: '#fef2f2',
-					100: '#fee2e2',
-					200: '#fecaca',
-					300: '#fca5a5',
-					400: '#f87171',
-					500: '#ef4444',
-					600: '#dc2626',
-					700: '#b91c1c',
-					800: '#991b1b',
-					900: '#7f1d1d',
+					50: '#ffebee',
+					100: '#ffcdd2',
+					200: '#ef9a9a',
+					300: '#e57373',
+					400: '#ef5350',
+					500: '#f44336',
+					600: '#e53935',
+					700: '#d32f2f',
+					800: '#c62828',
+					900: '#b71c1c',
 				},
 			},
 			fontFamily: {
-				sans: ['Inter', 'system-ui', 'sans-serif'],
+				sans: [
+					'overpass',
+					'-apple-system',
+					'BlinkMacSystemFont',
+					'Segoe UI',
+					'Roboto',
+					'Helvetica Neue',
+					'Arial',
+					'sans-serif',
+				],
+				serif: ['Pipetton Sans', 'prohibition', 'Arial Black', 'sans-serif'],
+				display: ['Pipetton Sans', 'prohibition', 'Arial Black', 'sans-serif'],
+				script: ['Pipetton Script', 'cursive'],
+				swash: ['Pipetton Swash', 'cursive'],
+				mono: ['overpass-mono', 'Courier New', 'monospace'],
 			},
 			animation: {
 				'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',

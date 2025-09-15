@@ -1,4 +1,4 @@
-# Baseball Scorecard Viewer - Next.js
+# Caught Looking - Next.js
 
 A modern React/Next.js web application for viewing baseball scorecards with live updates, built with TypeScript and Tailwind CSS.
 
