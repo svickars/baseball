@@ -20,16 +20,21 @@ else:
     if os.path.exists(baseball_path):
         sys.path.insert(0, baseball_path)
 
-# For now, we'll use mock data while we work on the integration
-# TODO: Integrate with the actual Baseball library
+# Change to the baseball directory to fix import issues
+original_cwd = os.getcwd()
+baseball_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'baseball')
+if os.path.exists(baseball_dir):
+    os.chdir(baseball_dir)
+
+# Import the Baseball library
 try:
-    # from baseball import get_game_from_url, get_game_from_file
-    # from baseball.generate_svg import get_game_svg_str
-    # from baseball.stats import get_all_pitcher_stats, get_all_batter_stats
-    pass
+    from baseball import get_game_from_url, get_game_from_file
+    from baseball.generate_svg import get_game_svg_str
+    from baseball.stats import get_all_pitcher_stats, get_all_batter_stats
+    BASEBALL_LIB_AVAILABLE = True
 except ImportError as e:
-    print(json.dumps({"error": f"Failed to import baseball library: {e}"}))
-    sys.exit(1)
+    print(f"Warning: Baseball library not available: {e}", file=sys.stderr)
+    BASEBALL_LIB_AVAILABLE = False
 
 def get_mlb_game_url(game_id: str) -> str:
     """Convert game ID to MLB API URL"""
@@ -169,12 +174,22 @@ def extract_pitcher_stats(pitcher) -> Dict[str, Any]:
 def get_detailed_game_data(game_id: str) -> Dict[str, Any]:
     """Get detailed game data using the Baseball library"""
     try:
-        # For now, we'll create a mock response since we don't have actual game files
-        # In a real implementation, you'd either:
-        # 1. Have game files stored locally
-        # 2. Fetch from MLB API and parse with the library
-        # 3. Use a different data source
+        if BASEBALL_LIB_AVAILABLE:
+            # Try to get real game data using the Baseball library
+            try:
+                # For now, we'll use a sample game file if available
+                # In production, you'd fetch from MLB API or use stored game files
+                sample_game_path = os.path.join(original_cwd, 'world_series_game7.json')
+                
+                if os.path.exists(sample_game_path):
+                    game = get_game_from_file(sample_game_path)
+                    return extract_game_data(game)
+                else:
+                    print(f"Sample game file not found at {sample_game_path}", file=sys.stderr)
+            except Exception as e:
+                print(f"Error loading real game data: {e}", file=sys.stderr)
         
+        # Enhanced mock data with realistic scorecard information
         mock_data = {
             "game_id": game_id,
             "date": "2025-09-14",
@@ -183,7 +198,7 @@ def get_detailed_game_data(game_id: str) -> Dict[str, Any]:
                 "abbreviation": "TB"
             },
             "home_team": {
-                "name": "Chicago Cubs", 
+                "name": "Chicago Cubs",
                 "abbreviation": "CHC"
             },
             "venue": "Wrigley Field",
@@ -191,76 +206,125 @@ def get_detailed_game_data(game_id: str) -> Dict[str, Any]:
             "innings": [
                 {
                     "inning": 1,
-                    "away_runs": 0,
+                    "away_runs": 2,
                     "home_runs": 0,
                     "top_events": [
                         {
-                            "batter": "Player 1",
-                            "pitcher": "Pitcher 1",
-                            "description": "Strikeout",
+                            "batter": "Yandy Díaz",
+                            "pitcher": "Justin Steele",
+                            "description": "Single to center field",
+                            "summary": "1B",
+                            "got_on_base": True,
+                            "runs_scored": 0,
+                            "rbis": 0,
+                            "outs": 0,
+                            "half": "top",
+                            "events": [
+                                {"type": "Fastball", "description": "Called Strike", "result": "0-1"},
+                                {"type": "Slider", "description": "Ball", "result": "1-1"},
+                                {"type": "Fastball", "description": "In play, single", "result": "1B"}
+                            ]
+                        },
+                        {
+                            "batter": "Randy Arozarena",
+                            "pitcher": "Justin Steele",
+                            "description": "Home run to left field",
+                            "summary": "HR",
+                            "got_on_base": True,
+                            "runs_scored": 1,
+                            "rbis": 2,
+                            "outs": 0,
+                            "half": "top",
+                            "events": [
+                                {"type": "Fastball", "description": "Ball", "result": "1-0"},
+                                {"type": "Curveball", "description": "Home run", "result": "HR"}
+                            ]
+                        },
+                        {
+                            "batter": "Isaac Paredes",
+                            "pitcher": "Justin Steele",
+                            "description": "Strikeout swinging",
                             "summary": "K",
                             "got_on_base": False,
                             "runs_scored": 0,
                             "rbis": 0,
                             "outs": 1,
                             "half": "top",
-                            "events": []
+                            "events": [
+                                {"type": "Fastball", "description": "Called Strike", "result": "0-1"},
+                                {"type": "Slider", "description": "Swinging Strike", "result": "0-2"},
+                                {"type": "Fastball", "description": "Swinging Strike", "result": "K"}
+                            ]
                         }
                     ],
-                    "bottom_events": []
+                    "bottom_events": [
+                        {
+                            "batter": "Nico Hoerner",
+                            "pitcher": "Tyler Glasnow",
+                            "description": "Ground out to shortstop",
+                            "summary": "6-3",
+                            "got_on_base": False,
+                            "runs_scored": 0,
+                            "rbis": 0,
+                            "outs": 1,
+                            "half": "bottom",
+                            "events": [
+                                {"type": "Fastball", "description": "Ball", "result": "1-0"},
+                                {"type": "Curveball", "description": "Ground out", "result": "6-3"}
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "inning": 2,
+                    "away_runs": 0,
+                    "home_runs": 1,
+                    "top_events": [],
+                    "bottom_events": [
+                        {
+                            "batter": "Cody Bellinger",
+                            "pitcher": "Tyler Glasnow",
+                            "description": "Home run to right field",
+                            "summary": "HR",
+                            "got_on_base": True,
+                            "runs_scored": 1,
+                            "rbis": 1,
+                            "outs": 0,
+                            "half": "bottom",
+                            "events": [
+                                {"type": "Fastball", "description": "Home run", "result": "HR"}
+                            ]
+                        }
+                    ]
                 }
             ],
             "batters": {
                 "away": [
-                    {
-                        "name": "Player 1",
-                        "at_bats": 4,
-                        "hits": 2,
-                        "runs": 1,
-                        "rbis": 2,
-                        "average": "0.500"
-                    }
+                    {"name": "Yandy Díaz", "at_bats": 4, "hits": 2, "runs": 1, "rbis": 0, "average": "0.285", "position": "1B", "lineup_order": 1},
+                    {"name": "Randy Arozarena", "at_bats": 4, "hits": 1, "runs": 1, "rbis": 2, "average": "0.254", "position": "LF", "lineup_order": 2},
+                    {"name": "Isaac Paredes", "at_bats": 4, "hits": 1, "runs": 0, "rbis": 0, "average": "0.267", "position": "3B", "lineup_order": 3},
+                    {"name": "Harold Ramírez", "at_bats": 3, "hits": 1, "runs": 0, "rbis": 0, "average": "0.298", "position": "DH", "lineup_order": 4},
+                    {"name": "Josh Lowe", "at_bats": 3, "hits": 0, "runs": 0, "rbis": 0, "average": "0.292", "position": "RF", "lineup_order": 5}
                 ],
                 "home": [
-                    {
-                        "name": "Player 2",
-                        "at_bats": 4,
-                        "hits": 1,
-                        "runs": 0,
-                        "rbis": 0,
-                        "average": "0.250"
-                    }
+                    {"name": "Nico Hoerner", "at_bats": 4, "hits": 1, "runs": 0, "rbis": 0, "average": "0.283", "position": "2B", "lineup_order": 1},
+                    {"name": "Cody Bellinger", "at_bats": 4, "hits": 2, "runs": 1, "rbis": 1, "average": "0.307", "position": "1B", "lineup_order": 2},
+                    {"name": "Seiya Suzuki", "at_bats": 4, "hits": 1, "runs": 0, "rbis": 0, "average": "0.285", "position": "RF", "lineup_order": 3},
+                    {"name": "Christopher Morel", "at_bats": 3, "hits": 0, "runs": 0, "rbis": 0, "average": "0.247", "position": "3B", "lineup_order": 4},
+                    {"name": "Ian Happ", "at_bats": 3, "hits": 1, "runs": 0, "rbis": 0, "average": "0.248", "position": "LF", "lineup_order": 5}
                 ]
             },
             "pitchers": {
                 "away": [
-                    {
-                        "name": "Pitcher 1",
-                        "innings_pitched": 6.0,
-                        "hits": 5,
-                        "runs": 3,
-                        "earned_runs": 3,
-                        "walks": 2,
-                        "strikeouts": 7,
-                        "era": "4.50"
-                    }
+                    {"name": "Tyler Glasnow", "innings_pitched": 6.0, "hits": 5, "runs": 3, "earned_runs": 3, "walks": 2, "strikeouts": 7, "era": "3.53"}
                 ],
                 "home": [
-                    {
-                        "name": "Pitcher 2",
-                        "innings_pitched": 7.0,
-                        "hits": 4,
-                        "runs": 2,
-                        "earned_runs": 2,
-                        "walks": 1,
-                        "strikeouts": 8,
-                        "era": "2.57"
-                    }
+                    {"name": "Justin Steele", "innings_pitched": 5.2, "hits": 6, "runs": 4, "earned_runs": 4, "walks": 1, "strikeouts": 6, "era": "3.06"}
                 ]
             },
             "events": [],
-            "integration_status": "mock_data",
-            "note": "This is mock data. Integration with actual Baseball library data is in progress."
+            "integration_status": "enhanced_mock_data",
+            "note": "Enhanced mock data with realistic player names, pitch sequences, and traditional scorecard information. Ready for Baseball library integration."
         }
         
         return mock_data
