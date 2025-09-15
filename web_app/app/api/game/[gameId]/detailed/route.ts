@@ -43,7 +43,7 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 								{
 									error: 'Failed to parse Python output',
 									output,
-									error,
+									stderr: error,
 								},
 								{ status: 500 }
 							)
