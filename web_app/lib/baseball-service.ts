@@ -188,9 +188,14 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 				const homeTeam = teams.home || {};
 				const gameDetails = gameData.game || {};
 
+				const awayTeamName = awayTeam.team?.name;
+				const homeTeamName = homeTeam.team?.name;
+				const awayCodeFromName = TEAM_ABBREVIATIONS[awayTeamName];
+				const homeCodeFromName = TEAM_ABBREVIATIONS[homeTeamName];
+
 				if (
-					awayTeam.team?.abbreviation === awayCode &&
-					homeTeam.team?.abbreviation === homeCode &&
+					awayCodeFromName === awayCode &&
+					homeCodeFromName === homeCode &&
 					(gameDetails.gameNumber || 1) === gameNumber
 				) {
 					gamePk = gameData.gamePk;
@@ -229,7 +234,6 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 
 					console.log(`Checking game: ${awayTeamName} (${awayCodeFromName}) vs ${homeTeamName} (${homeCodeFromName})`);
 					console.log(`Looking for: ${awayCode} vs ${homeCode}`);
-					console.log(`Game number: ${gameDetails.gameNumber || 1}, looking for: ${gameNumber}`);
 
 					if (
 						awayCodeFromName === awayCode &&
