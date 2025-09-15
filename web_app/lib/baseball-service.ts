@@ -56,7 +56,7 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 
 		const data = await response.json();
 		console.log(`MLB API returned ${data.dates?.length || 0} dates, ${data.dates?.[0]?.games?.length || 0} games`);
-		
+
 		// Debug: log first few games
 		if (data.dates?.[0]?.games) {
 			console.log('First 3 games:');
@@ -218,7 +218,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 					console.log('Found game by gamePk:', gamePk);
 				}
 			}
-			
+
 			// If not found by gamePk, try by team codes
 			if (!gameData) {
 				for (const game of scheduleData.dates[0].games) {
@@ -235,10 +235,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 					console.log(`Checking game: ${awayTeamName} (${awayCodeFromName}) vs ${homeTeamName} (${homeCodeFromName})`);
 					console.log(`Looking for: ${awayCode} vs ${homeCode}`);
 
-					if (
-						awayCodeFromName === awayCode &&
-						homeCodeFromName === homeCode
-					) {
+					if (awayCodeFromName === awayCode && homeCodeFromName === homeCode) {
 						gameData = game;
 						console.log('Found matching game!');
 						break;
@@ -267,12 +264,32 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 		const awayScore = awayTeam.score || 0;
 		const homeScore = homeTeam.score || 0;
 
-		// Build a simple inning list (since we don't have detailed inning data)
-		const inningList = Array.from({ length: 9 }, (_, i) => ({ 
+		// Try to get detailed inning data from the game feed
+		let inningList = Array.from({ length: 9 }, (_, i) => ({
 			inning: i + 1,
 			away: 0,
-			home: 0
+			home: 0,
 		}));
+
+		try {
+			// Fetch detailed game data for inning-by-inning scores
+			const gameFeedResponse = await fetch(`${MLB_API_BASE}/game/${gameData.gamePk}/feed/live`);
+			if (gameFeedResponse.ok) {
+				const gameFeedData = await gameFeedResponse.json();
+				const linescore = gameFeedData.liveData?.linescore;
+				
+				if (linescore && linescore.innings) {
+					inningList = linescore.innings.map((inning: any, index: number) => ({
+						inning: index + 1,
+						away: inning.away?.runs || 0,
+						home: inning.home?.runs || 0,
+					}));
+					console.log('Got detailed inning data from game feed');
+				}
+			}
+		} catch (feedError) {
+			console.log('Could not fetch detailed game feed, using basic data');
+		}
 
 		return {
 			game_id: gameId,
@@ -291,7 +308,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 				is_postponed: status.detailedState === 'Postponed',
 				is_suspended: status.detailedState === 'Suspended',
 			},
-			svg_content: generateDetailedSVGFromSchedule(gameData, awayCodeFromName, homeCodeFromName),
+			svg_content: generateDetailedSVGFromSchedule(gameData, awayCodeFromName, homeCodeFromName, inningList),
 			success: true,
 		};
 	} catch (error) {
@@ -349,7 +366,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 }
 
 // SVG generator for schedule data
-function generateDetailedSVGFromSchedule(gameData: any, awayCode: string, homeCode: string): string {
+function generateDetailedSVGFromSchedule(gameData: any, awayCode: string, homeCode: string, inningList: any[] = []): string {
 	const teams = gameData.teams || {};
 	const awayTeam = teams.away || {};
 	const homeTeam = teams.home || {};
@@ -386,21 +403,33 @@ function generateDetailedSVGFromSchedule(gameData: any, awayCode: string, homeCo
 				Status: ${gameStatus}
 			</text>
 			
-			<!-- Score Summary -->
+			<!-- Inning-by-Inning Scores -->
 			<text x="400" y="150" text-anchor="middle" font-size="16" font-weight="bold">
-				Game Summary
+				Inning-by-Inning Scores
 			</text>
 			
-			<text x="400" y="180" text-anchor="middle" font-size="14">
-				${awayTeamName}: ${awayScore} runs
-			</text>
+			<!-- Inning Headers -->
+			<text x="200" y="180" text-anchor="middle" font-size="14" font-weight="bold">Inning</text>
+			<text x="300" y="180" text-anchor="middle" font-size="14" font-weight="bold">${awayCode}</text>
+			<text x="500" y="180" text-anchor="middle" font-size="14" font-weight="bold">${homeCode}</text>
 			
-			<text x="400" y="200" text-anchor="middle" font-size="14">
-				${homeTeamName}: ${homeScore} runs
-			</text>
+			<!-- Inning Scores -->
+			${inningList.map((inning, index) => `
+				<text x="200" y="${200 + index * 25}" text-anchor="middle" font-size="12">${inning.inning}</text>
+				<text x="300" y="${200 + index * 25}" text-anchor="middle" font-size="12">${inning.away}</text>
+				<text x="500" y="${200 + index * 25}" text-anchor="middle" font-size="12">${inning.home}</text>
+			`).join('')}
+			
+			<!-- Total Scores -->
+			<line x1="150" y1="${200 + inningList.length * 25 + 10}" x2="550" y2="${200 + inningList.length * 25 + 10}" stroke="black" stroke-width="1"/>
+			<text x="200" y="${200 + inningList.length * 25 + 30}" text-anchor="middle" font-size="14" font-weight="bold">Total</text>
+			<text x="300" y="${200 + inningList.length * 25 + 30}" text-anchor="middle" font-size="14" font-weight="bold">${awayScore}</text>
+			<text x="500" y="${200 + inningList.length * 25 + 30}" text-anchor="middle" font-size="14" font-weight="bold">${homeScore}</text>
 			
 			<!-- Winner -->
-			<text x="400" y="240" text-anchor="middle" font-size="16" font-weight="bold" fill="${awayScore > homeScore ? 'blue' : 'red'}">
+			<text x="400" y="${200 + inningList.length * 25 + 60}" text-anchor="middle" font-size="16" font-weight="bold" fill="${
+				awayScore > homeScore ? 'blue' : 'red'
+			}">
 				Winner: ${awayScore > homeScore ? awayTeamName : homeTeamName}
 			</text>
 			
@@ -440,7 +469,7 @@ function generateDetailedSVG(gameData: any, awayCode: string, homeCode: string):
 			const homeRuns = inning.home?.runs || 0;
 			awayTotal += awayRuns;
 			homeTotal += homeRuns;
-			
+
 			inningRows += `
 				<text x="100" y="${120 + index * 25}" font-size="14">${inning.num}</text>
 				<text x="200" y="${120 + index * 25}" font-size="14" text-anchor="middle">${awayRuns}</text>
@@ -469,7 +498,9 @@ function generateDetailedSVG(gameData: any, awayCode: string, homeCode: string):
 			
 			<!-- Game Info -->
 			<text x="400" y="55" text-anchor="middle" font-size="16">
-				${gameInfo.venue?.name || 'Stadium'} - ${gameInfo.game?.gameDate ? new Date(gameInfo.game.gameDate).toLocaleDateString() : ''}
+				${gameInfo.venue?.name || 'Stadium'} - ${
+		gameInfo.game?.gameDate ? new Date(gameInfo.game.gameDate).toLocaleDateString() : ''
+	}
 			</text>
 			
 			<!-- Current Score -->
