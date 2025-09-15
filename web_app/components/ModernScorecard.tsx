@@ -137,8 +137,8 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 								if (!inning) return <div className="text-gray-500">No data available for this inning</div>;
 
 								const allEvents = [
-									...(inning.top_events || []).map((event) => ({ ...event, half: 'top' })),
-									...(inning.bottom_events || []).map((event) => ({ ...event, half: 'bottom' })),
+									...(inning.top_events || []).map((event: GameEvent) => ({ ...event, half: 'top' })),
+									...(inning.bottom_events || []).map((event: GameEvent) => ({ ...event, half: 'bottom' })),
 								];
 
 								return allEvents.map((event, index) => {
