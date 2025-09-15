@@ -277,7 +277,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 			if (gameFeedResponse.ok) {
 				const gameFeedData = await gameFeedResponse.json();
 				const linescore = gameFeedData.liveData?.linescore;
-				
+
 				if (linescore && linescore.innings) {
 					inningList = linescore.innings.map((inning: any, index: number) => ({
 						inning: index + 1,
@@ -366,7 +366,12 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 }
 
 // SVG generator for schedule data
-function generateDetailedSVGFromSchedule(gameData: any, awayCode: string, homeCode: string, inningList: any[] = []): string {
+function generateDetailedSVGFromSchedule(
+	gameData: any,
+	awayCode: string,
+	homeCode: string,
+	inningList: any[] = []
+): string {
 	const teams = gameData.teams || {};
 	const awayTeam = teams.away || {};
 	const homeTeam = teams.home || {};
@@ -414,22 +419,34 @@ function generateDetailedSVGFromSchedule(gameData: any, awayCode: string, homeCo
 			<text x="500" y="180" text-anchor="middle" font-size="14" font-weight="bold">${homeCode}</text>
 			
 			<!-- Inning Scores -->
-			${inningList.map((inning, index) => `
+			${inningList
+				.map(
+					(inning, index) => `
 				<text x="200" y="${200 + index * 25}" text-anchor="middle" font-size="12">${inning.inning}</text>
 				<text x="300" y="${200 + index * 25}" text-anchor="middle" font-size="12">${inning.away}</text>
 				<text x="500" y="${200 + index * 25}" text-anchor="middle" font-size="12">${inning.home}</text>
-			`).join('')}
+			`
+				)
+				.join('')}
 			
 			<!-- Total Scores -->
-			<line x1="150" y1="${200 + inningList.length * 25 + 10}" x2="550" y2="${200 + inningList.length * 25 + 10}" stroke="black" stroke-width="1"/>
-			<text x="200" y="${200 + inningList.length * 25 + 30}" text-anchor="middle" font-size="14" font-weight="bold">Total</text>
-			<text x="300" y="${200 + inningList.length * 25 + 30}" text-anchor="middle" font-size="14" font-weight="bold">${awayScore}</text>
-			<text x="500" y="${200 + inningList.length * 25 + 30}" text-anchor="middle" font-size="14" font-weight="bold">${homeScore}</text>
+			<line x1="150" y1="${200 + inningList.length * 25 + 10}" x2="550" y2="${
+		200 + inningList.length * 25 + 10
+	}" stroke="black" stroke-width="1"/>
+			<text x="200" y="${
+				200 + inningList.length * 25 + 30
+			}" text-anchor="middle" font-size="14" font-weight="bold">Total</text>
+			<text x="300" y="${
+				200 + inningList.length * 25 + 30
+			}" text-anchor="middle" font-size="14" font-weight="bold">${awayScore}</text>
+			<text x="500" y="${
+				200 + inningList.length * 25 + 30
+			}" text-anchor="middle" font-size="14" font-weight="bold">${homeScore}</text>
 			
 			<!-- Winner -->
 			<text x="400" y="${200 + inningList.length * 25 + 60}" text-anchor="middle" font-size="16" font-weight="bold" fill="${
-				awayScore > homeScore ? 'blue' : 'red'
-			}">
+		awayScore > homeScore ? 'blue' : 'red'
+	}">
 				Winner: ${awayScore > homeScore ? awayTeamName : homeTeamName}
 			</text>
 			

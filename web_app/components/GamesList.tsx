@@ -3,6 +3,7 @@
 import { Game } from '@/types';
 import { formatDate, getStatusColor, isGameLive } from '@/lib/utils';
 import { Clock, MapPin, Trophy } from 'lucide-react';
+import Link from 'next/link';
 
 interface GamesListProps {
 	games: Game[];
@@ -35,7 +36,7 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 					const statusClass = game.status.toLowerCase().replace(/\s+/g, '-');
 
 					return (
-						<div key={game.id} className={`game-card ${isLive ? 'live' : ''}`} onClick={() => onGameSelect(game.id)}>
+						<Link key={game.id} href={`/game/${game.id}`} className={`game-card ${isLive ? 'live' : ''} block`}>
 							<div className="flex justify-between items-start mb-3">
 								<h3 className="text-lg font-semibold text-secondary-900">
 									{game.away_team} @ {game.home_team}
@@ -72,7 +73,7 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 								<MapPin className="w-4 h-4" />
 								<span>{game.location}</span>
 							</div>
-						</div>
+						</Link>
 					);
 				})}
 			</div>
