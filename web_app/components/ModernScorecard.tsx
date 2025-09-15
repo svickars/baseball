@@ -14,6 +14,8 @@ interface InningData {
 	away: number;
 	home: number;
 	events?: GameEvent[];
+	top_events?: GameEvent[];
+	bottom_events?: GameEvent[];
 }
 
 interface GameEvent {
@@ -24,6 +26,15 @@ interface GameEvent {
 	position?: string;
 	svg?: string;
 	timestamp?: string;
+	summary?: string;
+	batter?: string;
+	pitcher?: string;
+	outs?: number;
+	inning?: number;
+	half?: string;
+	events?: any[];
+	runs_scored?: number;
+	rbis?: number;
 }
 
 interface BatterData {
@@ -141,8 +152,9 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 									...(inning.bottom_events || []).map((event: GameEvent) => ({ ...event, half: 'bottom' })),
 								];
 
-								return allEvents.map((event, index) => {
-									const getEventIcon = (summary: string) => {
+								return allEvents.map((event: GameEvent & { half: string }, index) => {
+									const getEventIcon = (summary?: string) => {
+										if (!summary) return '•';
 										if (summary.includes('Strikeout')) return 'K';
 										if (summary.includes('Single')) return '1B';
 										if (summary.includes('Double')) return '2B';
@@ -158,7 +170,8 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 										return '?';
 									};
 
-									const getEventColor = (summary: string) => {
+									const getEventColor = (summary?: string) => {
+										if (!summary) return 'bg-gray-500';
 										if (summary.includes('Strikeout') || summary.includes('out')) return 'bg-red-500';
 										if (
 											summary.includes('Single') ||
@@ -225,14 +238,14 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 								</thead>
 								<tbody>
 									{awayBatters.length > 0 ? (
-										awayBatters.map((batter, index) => (
+										awayBatters.map((batter: BatterData, index: number) => (
 											<tr key={index} className="border-b">
 												<td className="p-2">{batter.name}</td>
-												<td className="text-center p-2">{batter.at_bats || 0}</td>
+												<td className="text-center p-2">{batter.atBats || 0}</td>
 												<td className="text-center p-2">{batter.hits || 0}</td>
 												<td className="text-center p-2">{batter.runs || 0}</td>
 												<td className="text-center p-2">{batter.rbis || 0}</td>
-												<td className="text-center p-2">{batter.average || '.000'}</td>
+												<td className="text-center p-2">{batter.avg || '.000'}</td>
 											</tr>
 										))
 									) : (
@@ -264,14 +277,14 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 								</thead>
 								<tbody>
 									{homeBatters.length > 0 ? (
-										homeBatters.map((batter, index) => (
+										homeBatters.map((batter: BatterData, index: number) => (
 											<tr key={index} className="border-b">
 												<td className="p-2">{batter.name}</td>
-												<td className="text-center p-2">{batter.at_bats || 0}</td>
+												<td className="text-center p-2">{batter.atBats || 0}</td>
 												<td className="text-center p-2">{batter.hits || 0}</td>
 												<td className="text-center p-2">{batter.runs || 0}</td>
 												<td className="text-center p-2">{batter.rbis || 0}</td>
-												<td className="text-center p-2">{batter.average || '.000'}</td>
+												<td className="text-center p-2">{batter.avg || '.000'}</td>
 											</tr>
 										))
 									) : (
@@ -308,13 +321,13 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 									</thead>
 									<tbody>
 										{awayPitchers.length > 0 ? (
-											awayPitchers.map((pitcher, index) => (
+											awayPitchers.map((pitcher: PitcherData, index: number) => (
 												<tr key={index} className="border-b">
 													<td className="p-2">{pitcher.name}</td>
-													<td className="text-center p-2">{pitcher.innings_pitched || '0.0'}</td>
+													<td className="text-center p-2">{pitcher.innings || '0.0'}</td>
 													<td className="text-center p-2">{pitcher.hits || 0}</td>
 													<td className="text-center p-2">{pitcher.runs || 0}</td>
-													<td className="text-center p-2">{pitcher.earned_runs || 0}</td>
+													<td className="text-center p-2">{pitcher.earnedRuns || 0}</td>
 													<td className="text-center p-2">{pitcher.walks || 0}</td>
 													<td className="text-center p-2">{pitcher.strikeouts || 0}</td>
 												</tr>
@@ -348,13 +361,13 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 									</thead>
 									<tbody>
 										{homePitchers.length > 0 ? (
-											homePitchers.map((pitcher, index) => (
+											homePitchers.map((pitcher: PitcherData, index: number) => (
 												<tr key={index} className="border-b">
 													<td className="p-2">{pitcher.name}</td>
-													<td className="text-center p-2">{pitcher.innings_pitched || '0.0'}</td>
+													<td className="text-center p-2">{pitcher.innings || '0.0'}</td>
 													<td className="text-center p-2">{pitcher.hits || 0}</td>
 													<td className="text-center p-2">{pitcher.runs || 0}</td>
-													<td className="text-center p-2">{pitcher.earned_runs || 0}</td>
+													<td className="text-center p-2">{pitcher.earnedRuns || 0}</td>
 													<td className="text-center p-2">{pitcher.walks || 0}</td>
 													<td className="text-center p-2">{pitcher.strikeouts || 0}</td>
 												</tr>
@@ -387,10 +400,10 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 		}
 
 		// Flatten all events from all innings
-		const allEvents = [];
-		detailedData.innings.forEach((inning) => {
+		const allEvents: any[] = [];
+		detailedData.innings.forEach((inning: InningData) => {
 			if (inning.top_events) {
-				inning.top_events.forEach((event) => {
+				inning.top_events.forEach((event: GameEvent) => {
 					allEvents.push({
 						...event,
 						inning: inning.inning,
@@ -399,7 +412,7 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 				});
 			}
 			if (inning.bottom_events) {
-				inning.bottom_events.forEach((event) => {
+				inning.bottom_events.forEach((event: GameEvent) => {
 					allEvents.push({
 						...event,
 						inning: inning.inning,
@@ -413,8 +426,9 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 			<div className="bg-white rounded-lg shadow-lg p-6">
 				<h3 className="font-bold text-lg mb-4">Game Events</h3>
 				<div className="space-y-3 max-h-96 overflow-y-auto">
-					{allEvents.map((event, index) => {
-						const getEventColor = (summary: string) => {
+					{allEvents.map((event: GameEvent, index) => {
+						const getEventColor = (summary?: string) => {
+							if (!summary) return 'bg-gray-500';
 							if (summary.includes('Strikeout') || summary.includes('out')) return 'bg-red-500';
 							if (
 								summary.includes('Single') ||
@@ -460,7 +474,7 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 										<div className="mt-2">
 											<div className="text-xs text-gray-500 mb-1">Pitch Sequence:</div>
 											<div className="flex flex-wrap gap-1">
-												{event.events.map((pitch, pitchIndex) => (
+												{event.events?.map((pitch: any, pitchIndex: number) => (
 													<span
 														key={pitchIndex}
 														className="px-2 py-1 bg-white rounded text-xs border"
@@ -472,10 +486,10 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 										</div>
 									)}
 
-									{(event.runs_scored > 0 || event.rbis > 0) && (
+									{((event.runs_scored || 0) > 0 || (event.rbis || 0) > 0) && (
 										<div className="mt-1 text-xs text-green-600">
-											{event.runs_scored > 0 && `Runs: ${event.runs_scored} `}
-											{event.rbis > 0 && `RBIs: ${event.rbis}`}
+											{(event.runs_scored || 0) > 0 && `Runs: ${event.runs_scored} `}
+											{(event.rbis || 0) > 0 && `RBIs: ${event.rbis}`}
 										</div>
 									)}
 								</div>
@@ -519,7 +533,7 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 							{ id: 'traditional', label: 'Traditional Scorecard' },
 							{ id: 'stats', label: 'Statistics' },
 							{ id: 'events', label: 'Events' },
-						].map((tab) => (
+						].map((tab: { id: string; label: string }, index) => (
 							<button
 								key={tab.id}
 								onClick={() => setActiveTab(tab.id as any)}

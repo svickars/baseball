@@ -83,12 +83,12 @@ module.exports = {
 				},
 			},
 			fontFamily: {
-				sans: ['overpass-variable', '-apple-system', 'Segoe UI', 'sans-serif'],
+				sans: ['overpass', '-apple-system', 'Segoe UI', 'sans-serif'],
 				serif: ['Pipetton Sans', 'prohibition', 'Arial Black', 'sans-serif'],
 				display: ['Pipetton Sans', 'prohibition', 'Arial Black', 'sans-serif'],
 				script: ['Pipetton Script', 'cursive'],
 				swash: ['Pipetton Swash', 'cursive'],
-				mono: ['overpass-mono-variable', 'Courier New', 'monospace'],
+				mono: ['overpass-mono', 'Courier New', 'monospace'],
 			},
 			animation: {
 				'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
