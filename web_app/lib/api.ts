@@ -1,10 +1,9 @@
 import axios from 'axios';
 import { GamesResponse, GameData, TeamsResponse, ApiResponse } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
+// Use relative URLs to avoid CORS issues when ports change
 const api = axios.create({
-	baseURL: API_BASE_URL,
+	baseURL: '',
 	timeout: 30000,
 	headers: {
 		'Content-Type': 'application/json',
