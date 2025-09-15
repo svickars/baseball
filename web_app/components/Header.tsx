@@ -94,7 +94,7 @@ export default function Header({ onLoadGames, isLoading, onNavigateToGames, sele
 											}}
 											onClick={(e) => {
 												console.log('Date input clicked!');
-												e.target.showPicker?.();
+												(e.target as HTMLInputElement).showPicker?.();
 											}}
 											onFocus={(e) => {
 												console.log('Date input focused!');
