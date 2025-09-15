@@ -55,7 +55,7 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 							{
 								error: 'Python script failed',
 								code,
-								error,
+								stderr: error,
 							},
 							{ status: 500 }
 						)

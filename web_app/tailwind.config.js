@@ -84,7 +84,7 @@ module.exports = {
 			},
 			fontFamily: {
 				sans: [
-					'overpass',
+					'overpass-variable',
 					'-apple-system',
 					'BlinkMacSystemFont',
 					'Segoe UI',
@@ -97,7 +97,7 @@ module.exports = {
 				display: ['Pipetton Sans', 'prohibition', 'Arial Black', 'sans-serif'],
 				script: ['Pipetton Script', 'cursive'],
 				swash: ['Pipetton Swash', 'cursive'],
-				mono: ['overpass-mono', 'Courier New', 'monospace'],
+				mono: ['overpass-mono-variable', 'Courier New', 'monospace'],
 			},
 			animation: {
 				'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',

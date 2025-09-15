@@ -38,7 +38,7 @@
 	html {
 		font-family: 'overpass-variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial,
 			sans-serif;
-		font-variation-settings: 'wght' 400;
+		font-variation-settings: 'wght' var(--font-weight-variable);
 		background-color: #faf9f7; /* Cream background */
 	}
 
@@ -47,7 +47,7 @@
 		color: #2d251c; /* Dark brown text */
 		font-family: 'overpass-variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial,
 			sans-serif;
-		font-variation-settings: 'wght' 400;
+		font-variation-settings: 'wght' var(--font-weight-variable);
 	}
 
 	h1,
@@ -64,7 +64,7 @@
 	h5,
 	h5 {
 		font-family: 'overpass-variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial;
-		font-variation-settings: 'wght' 400;
+		font-variation-settings: 'wght' var(--font-weight-variable);
 	}
 
 	h1 {
