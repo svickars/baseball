@@ -93,7 +93,7 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 					{/* Away Team */}
 					<div className="col-span-1 font-bold text-right pr-2">{gameData.game_data.away_team.abbreviation}</div>
 					{Array.from({ length: 9 }, (_, i) => {
-						const inning = innings.find((inn) => inn.inning === i + 1);
+						const inning = innings.find((inn: InningData) => inn.inning === i + 1);
 						const runs = inning ? inning.away_runs || inning.away || 0 : 0;
 						return (
 							<div
@@ -111,7 +111,7 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 					{/* Home Team */}
 					<div className="col-span-1 font-bold text-right pr-2">{gameData.game_data.home_team.abbreviation}</div>
 					{Array.from({ length: 9 }, (_, i) => {
-						const inning = innings.find((inn) => inn.inning === i + 1);
+						const inning = innings.find((inn: InningData) => inn.inning === i + 1);
 						const runs = inning ? inning.home_runs || inning.home || 0 : 0;
 						return (
 							<div
@@ -133,7 +133,7 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 						<h3 className="font-bold text-lg mb-3">Inning {selectedInning} Details</h3>
 						<div className="space-y-2">
 							{(() => {
-								const inning = detailedData.innings?.find((inn) => inn.inning === selectedInning);
+								const inning = detailedData.innings?.find((inn: InningData) => inn.inning === selectedInning);
 								if (!inning) return <div className="text-gray-500">No data available for this inning</div>;
 
 								const allEvents = [

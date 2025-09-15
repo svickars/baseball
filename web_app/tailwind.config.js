@@ -83,16 +83,7 @@ module.exports = {
 				},
 			},
 			fontFamily: {
-				sans: [
-					'overpass-variable',
-					'-apple-system',
-					'BlinkMacSystemFont',
-					'Segoe UI',
-					'Roboto',
-					'Helvetica Neue',
-					'Arial',
-					'sans-serif',
-				],
+				sans: ['overpass-variable', '-apple-system', 'Segoe UI', 'sans-serif'],
 				serif: ['Pipetton Sans', 'prohibition', 'Arial Black', 'sans-serif'],
 				display: ['Pipetton Sans', 'prohibition', 'Arial Black', 'sans-serif'],
 				script: ['Pipetton Script', 'cursive'],
