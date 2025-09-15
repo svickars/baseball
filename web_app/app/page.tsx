@@ -30,7 +30,7 @@ export default function HomePage() {
 	const isCurrentGameLive = selectedGame && games.some((game) => game.id === selectedGame.game_id && isGameLive(game));
 
 	return (
-		<main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+		<main className="max-w-7xl w-full mx-auto px-0 py-0 flex-1 border-l border-r border-primary-400 dark:border-primary-700 min-h-full">
 			{view === 'games' && (
 				<>
 					{error && (

@@ -17,15 +17,15 @@ export default function GameControls({ controls, onControlsChange }: GameControl
 	};
 
 	return (
-		<div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6 mb-8">
+		<div className="bg-white dark:bg-primary-800 rounded-xl shadow-sm border border-secondary-200 dark:border-primary-700 p-6 mb-8">
 			<div className="flex items-center gap-2 mb-6">
-				<Settings className="w-5 h-5 text-secondary-600" />
-				<h3 className="text-lg font-semibold text-secondary-900">Game Controls</h3>
+				<Settings className="w-5 h-5 text-secondary-600 dark:text-secondary-400" />
+				<h3 className="text-lg font-semibold text-secondary-900 dark:text-secondary-100">Game Controls</h3>
 			</div>
 
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 				<div className="space-y-2">
-					<label htmlFor="detailLevel" className="block text-sm font-medium text-secondary-700">
+					<label htmlFor="detailLevel" className="block text-sm font-medium text-secondary-700 dark:text-secondary-300">
 						Detail Level
 					</label>
 					<select
@@ -41,7 +41,7 @@ export default function GameControls({ controls, onControlsChange }: GameControl
 				</div>
 
 				<div className="space-y-2">
-					<label htmlFor="timeDelay" className="block text-sm font-medium text-secondary-700">
+					<label htmlFor="timeDelay" className="block text-sm font-medium text-secondary-700 dark:text-secondary-300">
 						Live Data Delay
 					</label>
 					<select
@@ -64,7 +64,7 @@ export default function GameControls({ controls, onControlsChange }: GameControl
 				</div>
 
 				<div className="space-y-2">
-					<label htmlFor="viewMode" className="block text-sm font-medium text-secondary-700">
+					<label htmlFor="viewMode" className="block text-sm font-medium text-secondary-700 dark:text-secondary-300">
 						View Mode
 					</label>
 					<select
@@ -79,24 +79,24 @@ export default function GameControls({ controls, onControlsChange }: GameControl
 				</div>
 
 				<div className="space-y-2">
-					<label className="flex items-center gap-2 text-sm font-medium text-secondary-700">
+					<label className="flex items-center gap-2 text-sm font-medium text-secondary-700 dark:text-secondary-300">
 						<input
 							type="checkbox"
 							checked={controls.showPitchData}
 							onChange={(e) => handleControlChange('showPitchData', e.target.checked)}
-							className="w-4 h-4 text-primary-600 border-secondary-300 rounded focus:ring-primary-500"
+							className="w-4 h-4 text-primary-600 dark:text-primary-400 border-secondary-300 dark:border-secondary-600 rounded focus:ring-primary-500 dark:focus:ring-primary-400"
 						/>
 						Show Pitch Data
 					</label>
 				</div>
 
 				<div className="space-y-2">
-					<label className="flex items-center gap-2 text-sm font-medium text-secondary-700">
+					<label className="flex items-center gap-2 text-sm font-medium text-secondary-700 dark:text-secondary-300">
 						<input
 							type="checkbox"
 							checked={controls.showPlayerStats}
 							onChange={(e) => handleControlChange('showPlayerStats', e.target.checked)}
-							className="w-4 h-4 text-primary-600 border-secondary-300 rounded focus:ring-primary-500"
+							className="w-4 h-4 text-primary-600 dark:text-primary-400 border-secondary-300 dark:border-secondary-600 rounded focus:ring-primary-500 dark:focus:ring-primary-400"
 						/>
 						Show Player Stats
 					</label>

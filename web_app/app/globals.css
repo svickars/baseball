@@ -1,9 +1,9 @@
+@import url('https://use.typekit.net/ymc0oaz.css');
+@import url('https://fonts.googleapis.com/css2?family=Overpass+Mono:wght@300..700&family=Overpass:ital,wght@0,100..900;1,100..900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://use.typekit.net/ymc0oaz.css');
-@import url('https://fonts.googleapis.com/css2?family=Overpass+Mono:wght@300..700&family=Overpass:ital,wght@0,100..900;1,100..900&display=swap');
 
 /* Pipetton Font Face Declarations */
 @font-face {
@@ -39,10 +39,19 @@
 		background-color: #faf9f7; /* Cream background */
 	}
 
+	html.dark {
+		background-color: #2d251c; /* Very dark brown background */
+	}
+
 	body {
 		background-color: #faf9f7;
 		color: #2d251c; /* Dark brown text */
 		font-family: 'Overpass', -apple-system, 'Segoe UI', sans-serif;
+	}
+
+	.dark body {
+		background-color: #2d251c;
+		color: #faf9f7; /* Cream text */
 	}
 
 	h1,
@@ -54,6 +63,11 @@
 		letter-spacing: 0.05em;
 	}
 
+	.dark h1,
+	.dark h2 {
+		color: #faf9f7;
+	}
+
 	h3,
 	h4,
 	h5,
@@ -63,6 +77,13 @@
 		color: #2d251c;
 		/* text-transform: uppercase; */
 		/* letter-spacing: 0.05em; */
+	}
+
+	.dark h3,
+	.dark h4,
+	.dark h5,
+	.dark h6 {
+		color: #faf9f7;
 	}
 
 	h1 {
@@ -110,40 +131,56 @@
 	}
 
 	.btn-primary {
-		@apply bg-accent-700 text-primary-50 hover:bg-accent-800 focus:ring-accent-500 shadow-sm hover:shadow-md hover:-translate-y-0.5;
+		@apply bg-accent-700 text-primary-50 hover:bg-accent-800 focus:ring-accent-500 rounded-none;
 	}
 
 	.btn-secondary {
-		@apply bg-primary-600 text-primary-50 hover:bg-primary-700 focus:ring-primary-500 shadow-sm hover:shadow-md hover:-translate-y-0.5;
+		@apply bg-primary-600 text-primary-50 hover:bg-primary-700 focus:ring-primary-500 rounded-none;
 	}
 
 	.btn-outline {
-		@apply bg-transparent text-accent-700 border-accent-700 hover:bg-accent-700 hover:text-primary-50 focus:ring-accent-500;
+		@apply bg-transparent text-accent-700 border-accent-700 hover:bg-accent-700 hover:text-primary-50 focus:ring-accent-500 rounded-none;
 	}
 
 	.input {
-		@apply w-full px-3 py-2 border border-primary-300 rounded-lg bg-primary-50 text-accent-900 placeholder-primary-500 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-colors;
+		@apply w-full px-3 pb-1.5 pt-2 border border-primary-300 rounded-none bg-primary-50 text-accent-900 placeholder-primary-500 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-colors;
 	}
 
 	.select {
-		@apply w-full px-3 py-2 border border-primary-300 rounded-lg bg-primary-50 text-accent-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-colors appearance-none bg-no-repeat bg-right bg-[length:1.5em_1.5em] pr-10;
+		@apply w-full px-3 py-2 border border-primary-300 rounded-none bg-primary-50 text-accent-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-colors appearance-none bg-no-repeat bg-right bg-[length:1.5em_1.5em] pr-10;
 		background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%237a6f5e' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
 	}
 
 	.card {
-		@apply bg-primary-50 rounded-xl shadow-sm border border-primary-200 p-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
+		@apply bg-primary-50 border border-primary-400 p-6 transition-all duration-200 -m-px;
 	}
 
 	.game-card {
-		@apply card cursor-pointer hover:border-primary-300;
+		@apply card cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800;
 	}
 
-	.game-card.live {
-		@apply border-success-300 bg-gradient-to-br from-white to-success-50;
-	}
+	/* .game-card.live {
+		@apply border-primary-300 bg-gradient-to-br from-white to-success-50;
+	} */
 
 	.live-indicator {
 		@apply inline-flex items-center gap-1 px-2 py-1 bg-success-500 text-white text-xs font-semibold rounded-md uppercase animate-pulse-slow;
+	}
+
+	.status-indicator {
+		@apply inline-flex items-center px-2 pt-1 pb-0.5 text-2xs font-semibold uppercase;
+	}
+
+	.status-indicator.live {
+		@apply bg-primary-200 text-accent-900 animate-pulse-slow;
+	}
+
+	.status-indicator.final {
+		@apply bg-primary-200 text-accent-900;
+	}
+
+	.status-indicator.upcoming {
+		@apply border bg-primary-200 border-none text-accent-600;
 	}
 
 	.status-badge {
@@ -172,6 +209,84 @@
 
 	.modal-content {
 		@apply bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto;
+	}
+
+	/* Dark mode component styles */
+	.dark .btn-primary {
+		@apply bg-accent-600 text-primary-50 hover:bg-accent-700 focus:ring-accent-400;
+	}
+
+	.dark .btn-secondary {
+		@apply bg-primary-700 text-primary-50 hover:bg-primary-800 focus:ring-primary-400;
+	}
+
+	.dark .btn-outline {
+		@apply bg-transparent text-accent-400 border-accent-400 hover:bg-accent-600 hover:text-primary-50 focus:ring-accent-400;
+	}
+
+	.dark .input {
+		@apply bg-primary-800 text-primary-50 border-primary-600 placeholder-primary-400 focus:ring-accent-400 focus:border-accent-400;
+	}
+
+	.dark .select {
+		@apply bg-primary-800 text-primary-50 border-primary-600 focus:ring-accent-400 focus:border-accent-400;
+	}
+
+	.dark .card {
+		@apply bg-primary-800 border-primary-700 hover:border-primary-600;
+	}
+
+	.dark .game-card {
+		@apply hover:border-primary-600;
+	}
+
+	.dark .game-card.live {
+		@apply border-success-400 bg-gradient-to-br from-primary-800 to-success-900;
+	}
+
+	.dark .live-indicator {
+		@apply bg-success-600 text-white;
+	}
+
+	.dark .status-indicator.live {
+		@apply bg-success-600 text-white;
+	}
+
+	.dark .status-indicator.final {
+		@apply bg-primary-500 text-white;
+	}
+
+	.dark .status-indicator.upcoming {
+		@apply bg-warning-600 text-white;
+	}
+
+	.dark .status-final {
+		@apply bg-success-900 text-success-200;
+	}
+
+	.dark .status-live {
+		@apply bg-warning-900 text-warning-200;
+	}
+
+	.dark .status-scheduled {
+		@apply bg-primary-700 text-primary-200;
+	}
+
+	.dark .spinner {
+		@apply border-secondary-700 border-t-primary-400;
+	}
+
+	.dark .modal-content {
+		@apply bg-primary-800 border-primary-700;
+	}
+
+	/* SVG logo styling for dark mode */
+	.logo-svg {
+		filter: brightness(0) saturate(100%);
+	}
+
+	.dark .logo-svg {
+		filter: brightness(0) saturate(100%) invert(100%);
 	}
 }
 

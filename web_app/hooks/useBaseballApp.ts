@@ -3,12 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Game, GameData, GameControls } from '@/types';
 import { baseballApi } from '@/lib/api';
-import { isGameLive } from '@/lib/utils';
+import { isGameLive, getTodayLocalDate } from '@/lib/utils';
 
 export function useBaseballApp() {
 	const [games, setGames] = useState<Game[]>([]);
 	const [selectedGame, setSelectedGame] = useState<GameData | null>(null);
-	const [selectedDate, setSelectedDate] = useState<string>('');
+	const [selectedDate, setSelectedDate] = useState<string>(() => getTodayLocalDate());
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [view, setView] = useState<'games' | 'scorecard'>('games');
@@ -216,9 +216,9 @@ export function useBaseballApp() {
 
 	// Load games on mount with current date
 	useEffect(() => {
-		const today = new Date().toISOString().split('T')[0];
+		const today = getTodayLocalDate();
 		loadGames(today);
-	}, [loadGames]);
+	}, [loadGames]); // Include loadGames in dependencies
 
 	// Cleanup on unmount
 	useEffect(() => {

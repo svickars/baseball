@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+	darkMode: 'class',
 	content: [
 		'./pages/**/*.{js,ts,jsx,tsx,mdx}',
 		'./components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -90,9 +91,22 @@ module.exports = {
 				swash: ['Pipetton Swash', 'cursive'],
 				mono: ['overpass-mono', 'Courier New', 'monospace'],
 			},
+			fontSize: {
+				'2xs': ['0.625rem', { lineHeight: '0.75rem' }], // 10px
+			},
 			animation: {
 				'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
 				'spin-slow': 'spin 3s linear infinite',
+			},
+			gridTemplateColumns: {
+				13: '1.5fr repeat(12, minmax(0, 1fr))',
+				14: '1.5fr repeat(13, minmax(0, 1fr))',
+				15: '1.5fr repeat(14, minmax(0, 1fr))',
+				16: '1.5fr repeat(15, minmax(0, 1fr))',
+				17: '1.5fr repeat(16, minmax(0, 1fr))',
+				18: '1.5fr repeat(17, minmax(0, 1fr))',
+				19: '1.5fr repeat(18, minmax(0, 1fr))',
+				20: '1.5fr repeat(19, minmax(0, 1fr))',
 			},
 		},
 	},

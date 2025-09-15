@@ -25,6 +25,7 @@ const TEAM_ABBREVIATIONS: { [key: string]: string } = {
 	'New York Mets': 'NYM',
 	'New York Yankees': 'NYY',
 	'Oakland Athletics': 'OAK',
+	Athletics: 'ATH',
 	'Philadelphia Phillies': 'PHI',
 	'Pittsburgh Pirates': 'PIT',
 	'San Diego Padres': 'SD',
@@ -39,13 +40,8 @@ const TEAM_ABBREVIATIONS: { [key: string]: string } = {
 
 export async function getGamesForDate(date: string): Promise<Game[]> {
 	try {
-		// Parse the date to get year, month, day
-		const dateObj = new Date(date);
-		const year = dateObj.getFullYear();
-		const month = dateObj.getMonth() + 1; // JavaScript months are 0-indexed
-		const day = dateObj.getDate();
-
-		console.log(`Fetching games for date: ${date} (${month}/${day}/${year})`);
+		// Parse the date string as local date (YYYY-MM-DD format)
+		const [year, month, day] = date.split('-').map(Number);
 
 		// Fetch games from MLB API
 		const response = await fetch(`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}`);
@@ -55,19 +51,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 		}
 
 		const data = await response.json();
-		console.log(`MLB API returned ${data.dates?.length || 0} dates, ${data.dates?.[0]?.games?.length || 0} games`);
-
-		// Debug: log first few games
-		if (data.dates?.[0]?.games) {
-			console.log('First 3 games:');
-			data.dates[0].games.slice(0, 3).forEach((game: any, index: number) => {
-				const awayTeam = game.teams?.away?.team?.name;
-				const homeTeam = game.teams?.home?.team?.name;
-				const awayCode = TEAM_ABBREVIATIONS[awayTeam];
-				const homeCode = TEAM_ABBREVIATIONS[homeTeam];
-				console.log(`  ${index + 1}. ${awayTeam} (${awayCode}) vs ${homeTeam} (${homeCode})`);
-			});
-		}
 
 		const games: Game[] = [];
 
@@ -104,6 +87,14 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 				const awayScore = awayTeam.score || 0;
 				const homeScore = homeTeam.score || 0;
 
+				// For now, we'll use basic data and let the frontend fetch detailed data when needed
+				// This avoids performance issues with calling Python scripts for every game in the list
+				let innings: Array<{ inning: number; away_runs: number; home_runs: number }> = [];
+				let awayHits = 0;
+				let homeHits = 0;
+				let awayErrors = 0;
+				let homeErrors = 0;
+
 				const game: Game = {
 					id: `${date}-${awayCode}-${homeCode}-${gameDetails.gameNumber || 1}`,
 					away_team: awayTeamName,
@@ -120,6 +111,11 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 					inning_state: gameData.linescore?.inningState || '',
 					away_score: awayScore,
 					home_score: homeScore,
+					innings: innings,
+					away_hits: awayHits,
+					home_hits: homeHits,
+					away_errors: awayErrors,
+					home_errors: homeErrors,
 				};
 
 				games.push(game);
@@ -129,7 +125,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 		return games;
 	} catch (error) {
 		console.error(`Error fetching games for ${date}:`, error);
-		console.log('Falling back to mock data');
 
 		// Fallback to mock data if API fails
 		return [
@@ -147,6 +142,21 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 				is_live: false,
 				away_score: 5,
 				home_score: 3,
+				innings: [
+					{ inning: 1, away_runs: 1, home_runs: 0 },
+					{ inning: 2, away_runs: 0, home_runs: 1 },
+					{ inning: 3, away_runs: 0, home_runs: 0 },
+					{ inning: 4, away_runs: 1, home_runs: 0 },
+					{ inning: 5, away_runs: 0, home_runs: 0 },
+					{ inning: 6, away_runs: 1, home_runs: 0 },
+					{ inning: 7, away_runs: 0, home_runs: 0 },
+					{ inning: 8, away_runs: 0, home_runs: 0 },
+					{ inning: 9, away_runs: 0, home_runs: 0 },
+				],
+				away_hits: 9,
+				home_hits: 6,
+				away_errors: 1,
+				home_errors: 0,
 			},
 		];
 	}
@@ -155,7 +165,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 export async function getGameDetails(gameId: string): Promise<GameData> {
 	try {
 		// Try to use the Python JSON integration script first
-		console.log(`Attempting to get detailed game data for ${gameId} using Python integration`);
 
 		// Import the Python integration function
 		const { exec } = require('child_process');
@@ -167,15 +176,13 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 			const { stdout, stderr } = await execAsync(`python3 lib/baseball_json_integration.py ${gameId}`);
 
 			if (stderr) {
-				console.log('Python script stderr:', stderr);
+				// Python script stderr output
 			}
 
 			// Parse the JSON output from Python
 			const gameData = JSON.parse(stdout);
 
-			if (gameData && gameData.integration_status === 'real_json_data') {
-				console.log('Successfully got detailed game data from Python integration');
-
+			if (gameData && gameData.integration_status === 'real_baseball_library_data') {
 				// Convert the Python data format to our expected format
 				const convertedGameData = {
 					away_team: {
@@ -206,11 +213,10 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 				};
 			}
 		} catch (pythonError) {
-			console.log('Python integration failed, falling back to MLB API:', pythonError);
+			// Python integration failed, falling back to MLB API
 		}
 
 		// Fallback to original MLB API logic
-		console.log('Falling back to MLB API for game details');
 
 		// Parse game ID to extract gamePk
 		// Format: YYYY-MM-DD-AWAY-HOME-GAME_NUMBER
@@ -273,7 +279,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 			if (gamePk) {
 				gameData = scheduleData.dates[0].games.find((game: any) => game.gamePk === gamePk);
 				if (gameData) {
-					console.log('Found game by gamePk:', gamePk);
+					// Found game by gamePk
 				}
 			}
 
@@ -290,12 +296,8 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 					const awayCodeFromName = TEAM_ABBREVIATIONS[awayTeamName];
 					const homeCodeFromName = TEAM_ABBREVIATIONS[homeTeamName];
 
-					console.log(`Checking game: ${awayTeamName} (${awayCodeFromName}) vs ${homeTeamName} (${homeCodeFromName})`);
-					console.log(`Looking for: ${awayCode} vs ${homeCode}`);
-
 					if (awayCodeFromName === awayCode && homeCodeFromName === homeCode) {
 						gameData = game;
-						console.log('Found matching game!');
 						break;
 					}
 				}
@@ -342,11 +344,10 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 						away: inning.away?.runs || 0,
 						home: inning.home?.runs || 0,
 					}));
-					console.log('Got detailed inning data from game feed');
 				}
 			}
 		} catch (feedError) {
-			console.log('Could not fetch detailed game feed, using basic data');
+			// Could not fetch detailed game feed, using basic data
 		}
 
 		return {
@@ -372,7 +373,6 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 	} catch (error) {
 		console.error(`Error fetching game details for ${gameId}:`, error);
 		console.error('Error details:', error instanceof Error ? error.message : String(error));
-		console.log('Falling back to mock data');
 
 		// Fallback to mock data if API fails
 		const parts = gameId.split('-');

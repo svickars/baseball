@@ -14,6 +14,15 @@ export interface Game {
 	inning_state?: string;
 	away_score?: number;
 	home_score?: number;
+	innings?: Array<{
+		inning: number;
+		away_runs: number;
+		home_runs: number;
+	}>;
+	away_hits?: number;
+	home_hits?: number;
+	away_errors?: number;
+	home_errors?: number;
 }
 
 export interface GameData {
