@@ -154,6 +154,64 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 
 export async function getGameDetails(gameId: string): Promise<GameData> {
 	try {
+		// Try to use the Python JSON integration script first
+		console.log(`Attempting to get detailed game data for ${gameId} using Python integration`);
+
+		// Import the Python integration function
+		const { exec } = require('child_process');
+		const util = require('util');
+		const execAsync = util.promisify(exec);
+
+		try {
+			// Call the Python script to get detailed game data
+			const { stdout, stderr } = await execAsync(`python3 lib/baseball_json_integration.py ${gameId}`);
+
+			if (stderr) {
+				console.log('Python script stderr:', stderr);
+			}
+
+			// Parse the JSON output from Python
+			const gameData = JSON.parse(stdout);
+
+			if (gameData && gameData.integration_status === 'real_json_data') {
+				console.log('Successfully got detailed game data from Python integration');
+
+				// Convert the Python data format to our expected format
+				const convertedGameData = {
+					away_team: {
+						name: gameData.away_team,
+						abbreviation: gameData.away_code,
+					},
+					home_team: {
+						name: gameData.home_team,
+						abbreviation: gameData.home_code,
+					},
+					game_date_str: gameData.game_date_str,
+					location: gameData.location,
+					inning_list: gameData.inning_list || [],
+					is_postponed: false,
+					is_suspended: false,
+					// Add the detailed data from Python
+					detailed_data: gameData,
+				};
+
+				// Generate SVG from the detailed data
+				const svgContent = generateDetailedSVGFromPythonData(gameData);
+
+				return {
+					game_id: gameId,
+					game_data: convertedGameData,
+					svg_content: svgContent,
+					success: true,
+				};
+			}
+		} catch (pythonError) {
+			console.log('Python integration failed, falling back to MLB API:', pythonError);
+		}
+
+		// Fallback to original MLB API logic
+		console.log('Falling back to MLB API for game details');
+
 		// Parse game ID to extract gamePk
 		// Format: YYYY-MM-DD-AWAY-HOME-GAME_NUMBER
 		const parts = gameId.split('-');
@@ -363,6 +421,128 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 			success: true,
 		};
 	}
+}
+
+// SVG generator for Python integration data
+function generateDetailedSVGFromPythonData(gameData: any): string {
+	const awayTeamName = gameData.away_team?.name || 'Away';
+	const homeTeamName = gameData.home_team?.name || 'Home';
+	const awayCode = gameData.away_team?.abbreviation || gameData.away_code || 'AWY';
+	const homeCode = gameData.home_team?.abbreviation || gameData.home_code || 'HOM';
+	const awayScore = gameData.total_away_runs || 0;
+	const homeScore = gameData.total_home_runs || 0;
+	const gameDate = gameData.game_date_str || '';
+	const location = gameData.location || 'Stadium';
+
+	// Build inning-by-inning score table
+	let inningRows = '';
+	let awayTotal = 0;
+	let homeTotal = 0;
+
+	if (gameData.innings && gameData.innings.length > 0) {
+		gameData.innings.forEach((inning: any, index: number) => {
+			const awayRuns = inning.away_runs || 0;
+			const homeRuns = inning.home_runs || 0;
+			awayTotal += awayRuns;
+			homeTotal += homeRuns;
+
+			inningRows += `
+				<text x="100" y="${120 + index * 25}" font-size="14">${inning.inning}</text>
+				<text x="200" y="${120 + index * 25}" font-size="14" text-anchor="middle">${awayRuns}</text>
+				<text x="300" y="${120 + index * 25}" font-size="14" text-anchor="middle">${homeRuns}</text>
+			`;
+		});
+	}
+
+	// Add totals row
+	const totalRowY = 120 + (gameData.innings?.length || 0) * 25 + 10;
+	inningRows += `
+		<line x1="80" y1="${totalRowY - 5}" x2="320" y2="${totalRowY - 5}" stroke="black" stroke-width="1"/>
+		<text x="100" y="${totalRowY + 15}" font-size="14" font-weight="bold">Total</text>
+		<text x="200" y="${totalRowY + 15}" font-size="14" text-anchor="middle" font-weight="bold">${awayTotal}</text>
+		<text x="300" y="${totalRowY + 15}" font-size="14" text-anchor="middle" font-weight="bold">${homeTotal}</text>
+	`;
+
+	// Add detailed event information if available
+	let eventDetails = '';
+	if (gameData.innings && gameData.innings.length > 0) {
+		eventDetails = `
+			<!-- Event Details -->
+			<text x="400" y="${totalRowY + 50}" text-anchor="middle" font-size="16" font-weight="bold">
+				Detailed Game Events
+			</text>
+		`;
+
+		let eventY = totalRowY + 80;
+		gameData.innings.forEach((inning: any, inningIndex: number) => {
+			if (inning.top_events && inning.top_events.length > 0) {
+				eventDetails += `
+					<text x="50" y="${eventY}" font-size="12" font-weight="bold">Top ${inning.inning}:</text>
+				`;
+				eventY += 20;
+
+				inning.top_events.slice(0, 3).forEach((event: any, eventIndex: number) => {
+					eventDetails += `
+						<text x="70" y="${eventY}" font-size="10">${event.batter}: ${event.summary}</text>
+					`;
+					eventY += 15;
+				});
+			}
+
+			if (inning.bottom_events && inning.bottom_events.length > 0) {
+				eventDetails += `
+					<text x="50" y="${eventY}" font-size="12" font-weight="bold">Bottom ${inning.inning}:</text>
+				`;
+				eventY += 20;
+
+				inning.bottom_events.slice(0, 3).forEach((event: any, eventIndex: number) => {
+					eventDetails += `
+						<text x="70" y="${eventY}" font-size="10">${event.batter}: ${event.summary}</text>
+					`;
+					eventY += 15;
+				});
+			}
+
+			eventY += 10;
+		});
+	}
+
+	return `
+		<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+			<rect width="800" height="600" fill="white" stroke="black" stroke-width="2"/>
+			
+			<!-- Header -->
+			<text x="400" y="30" text-anchor="middle" font-size="20" font-weight="bold">
+				${awayTeamName} (${awayCode}) vs ${homeTeamName} (${homeCode})
+			</text>
+			
+			<!-- Game Info -->
+			<text x="400" y="55" text-anchor="middle" font-size="16">
+				${location} - ${gameDate}
+			</text>
+			
+			<!-- Current Score -->
+			<text x="400" y="80" text-anchor="middle" font-size="18" font-weight="bold">
+				Final Score: ${awayCode} ${awayScore} - ${homeCode} ${homeScore}
+			</text>
+			
+			<!-- Scorecard Table Header -->
+			<text x="100" y="105" font-size="14" font-weight="bold">Inning</text>
+			<text x="200" y="105" font-size="14" text-anchor="middle" font-weight="bold">${awayCode}</text>
+			<text x="300" y="105" font-size="14" text-anchor="middle" font-weight="bold">${homeCode}</text>
+			
+			<!-- Inning-by-inning scores -->
+			${inningRows}
+			
+			<!-- Event Details -->
+			${eventDetails}
+			
+			<!-- Footer -->
+			<text x="400" y="580" text-anchor="middle" font-size="12" fill="gray">
+				Generated from Python Baseball Library Integration - Real Game Data
+			</text>
+		</svg>
+	`;
 }
 
 // SVG generator for schedule data

@@ -43,23 +43,34 @@ interface InningData {
 
 interface PlateAppearance {
 	batter: string;
+	batter_number?: string | number;
 	pitcher: string;
+	pitcher_number?: string | number;
 	description: string;
 	summary: string;
+	scorecard_summary?: string;
 	got_on_base: boolean;
 	runs_scored: number;
 	rbis: number;
 	outs: number;
 	half: string;
+	hit_location?: string;
+	error_str?: string;
+	start_datetime?: string;
+	end_datetime?: string;
 	events: PitchEvent[];
+	scoring_runners?: string[];
+	runners_batted_in?: string[];
+	out_runners?: any[];
 }
 
 interface PitchEvent {
 	type: string;
 	description: string;
-	location?: string;
-	speed?: number;
 	result: string;
+	speed?: number;
+	location?: number[];
+	datetime?: string;
 }
 
 interface BatterData {
@@ -118,7 +129,7 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 	const renderScorecardGrid = () => {
 		if (!detailedData) return null;
 
-		const maxInnings = Math.max(...detailedData.innings.map(i => i.inning), 9);
+		const maxInnings = Math.max(...detailedData.innings.map((i) => i.inning), 9);
 		const allBatters = [...detailedData.batters.away, ...detailedData.batters.home];
 
 		return (
@@ -137,9 +148,7 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 				<div className="border-2 border-gray-800">
 					{/* Inning Headers */}
 					<div className="grid grid-cols-12 gap-0 border-b-2 border-gray-800">
-						<div className="col-span-2 p-2 bg-gray-100 font-bold text-center border-r border-gray-400">
-							Player
-						</div>
+						<div className="col-span-2 p-2 bg-gray-100 font-bold text-center border-r border-gray-400">Player</div>
 						{Array.from({ length: maxInnings }, (_, i) => (
 							<div key={i} className="p-2 bg-gray-100 font-bold text-center border-r border-gray-400">
 								{i + 1}
@@ -166,15 +175,9 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 										{renderAtBatResult(batter, i + 1)}
 									</div>
 								))}
-								<div className="p-2 border-r border-gray-400 text-center font-bold">
-									{batter.runs}
-								</div>
-								<div className="p-2 border-r border-gray-400 text-center font-bold">
-									{batter.hits}
-								</div>
-								<div className="p-2 text-center font-bold">
-									{batter.rbis}
-								</div>
+								<div className="p-2 border-r border-gray-400 text-center font-bold">{batter.runs}</div>
+								<div className="p-2 border-r border-gray-400 text-center font-bold">{batter.hits}</div>
+								<div className="p-2 text-center font-bold">{batter.rbis}</div>
 							</div>
 						))}
 					</div>
@@ -195,15 +198,9 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 										{renderAtBatResult(batter, i + 1)}
 									</div>
 								))}
-								<div className="p-2 border-r border-gray-400 text-center font-bold">
-									{batter.runs}
-								</div>
-								<div className="p-2 border-r border-gray-400 text-center font-bold">
-									{batter.hits}
-								</div>
-								<div className="p-2 text-center font-bold">
-									{batter.rbis}
-								</div>
+								<div className="p-2 border-r border-gray-400 text-center font-bold">{batter.runs}</div>
+								<div className="p-2 border-r border-gray-400 text-center font-bold">{batter.hits}</div>
+								<div className="p-2 text-center font-bold">{batter.rbis}</div>
 							</div>
 						))}
 					</div>
@@ -211,16 +208,15 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 
 				{/* Inning Totals */}
 				<div className="mt-4 grid grid-cols-12 gap-0 border-2 border-gray-800">
-					<div className="col-span-2 p-2 bg-gray-100 font-bold text-center border-r border-gray-400">
-						Runs
-					</div>
+					<div className="col-span-2 p-2 bg-gray-100 font-bold text-center border-r border-gray-400">Runs</div>
 					{Array.from({ length: maxInnings }, (_, i) => (
 						<div key={i} className="p-2 bg-gray-100 font-bold text-center border-r border-gray-400">
 							{detailedData.innings[i]?.away_runs || 0} - {detailedData.innings[i]?.home_runs || 0}
 						</div>
 					))}
 					<div className="p-2 bg-gray-100 font-bold text-center">
-						{detailedData.innings.reduce((sum, inning) => sum + inning.away_runs, 0)} - {detailedData.innings.reduce((sum, inning) => sum + inning.home_runs, 0)}
+						{detailedData.innings.reduce((sum, inning) => sum + inning.away_runs, 0)} -{' '}
+						{detailedData.innings.reduce((sum, inning) => sum + inning.home_runs, 0)}
 					</div>
 				</div>
 			</div>
@@ -229,23 +225,23 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 
 	const renderAtBatResult = (batter: BatterData, inning: number) => {
 		// Find the plate appearance for this batter in this inning
-		const inningData = detailedData?.innings.find(i => i.inning === inning);
+		const inningData = detailedData?.innings.find((i) => i.inning === inning);
 		if (!inningData) return '';
 
-		const plateAppearance = [...inningData.top_events, ...inningData.bottom_events]
-			.find(pa => pa.batter === batter.name);
+		const plateAppearance = [...inningData.top_events, ...inningData.bottom_events].find(
+			(pa) => pa.batter === batter.name
+		);
 
 		if (!plateAppearance) return '';
 
 		// Render the result with appropriate styling
 		const result = plateAppearance.summary || plateAppearance.description;
-		
+
 		return (
-			<div 
+			<div
 				className="cursor-pointer hover:bg-gray-100 p-1 rounded"
 				onClick={() => setSelectedPlayer(`${batter.name}-${inning}`)}
-				title={`Click for details: ${plateAppearance.description}`}
-			>
+				title={`Click for details: ${plateAppearance.description}`}>
 				{result}
 			</div>
 		);
@@ -256,12 +252,13 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 
 		const [playerName, inning] = selectedPlayer.split('-');
 		const inningNum = parseInt(inning);
-		const inningData = detailedData.innings.find(i => i.inning === inningNum);
-		
+		const inningData = detailedData.innings.find((i) => i.inning === inningNum);
+
 		if (!inningData) return null;
 
-		const plateAppearance = [...inningData.top_events, ...inningData.bottom_events]
-			.find(pa => pa.batter === playerName);
+		const plateAppearance = [...inningData.top_events, ...inningData.bottom_events].find(
+			(pa) => pa.batter === playerName
+		);
 
 		if (!plateAppearance) return null;
 
@@ -270,18 +267,56 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 				<h3 className="font-bold text-lg mb-3">
 					{playerName} - Inning {inningNum} Details
 				</h3>
-				
+
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
 						<h4 className="font-semibold mb-2">At-Bat Summary</h4>
 						<div className="bg-white p-3 rounded border">
-							<div><strong>Batter:</strong> {plateAppearance.batter}</div>
-							<div><strong>Pitcher:</strong> {plateAppearance.pitcher}</div>
-							<div><strong>Result:</strong> {plateAppearance.description}</div>
-							<div><strong>Summary:</strong> {plateAppearance.summary}</div>
-							<div><strong>Runs Scored:</strong> {plateAppearance.runs_scored}</div>
-							<div><strong>RBIs:</strong> {plateAppearance.rbis}</div>
-							<div><strong>Outs:</strong> {plateAppearance.outs}</div>
+							<div className="grid grid-cols-2 gap-2 text-sm">
+								<div>
+									<strong>Batter:</strong> {plateAppearance.batter}
+									{plateAppearance.batter_number && (
+										<span className="ml-1 text-gray-500">#{plateAppearance.batter_number}</span>
+									)}
+								</div>
+								<div>
+									<strong>Pitcher:</strong> {plateAppearance.pitcher}
+									{plateAppearance.pitcher_number && (
+										<span className="ml-1 text-gray-500">#{plateAppearance.pitcher_number}</span>
+									)}
+								</div>
+								<div className="col-span-2">
+									<strong>Result:</strong> {plateAppearance.description}
+								</div>
+								<div>
+									<strong>Summary:</strong> {plateAppearance.summary}
+								</div>
+								<div>
+									<strong>Scorecard:</strong> {plateAppearance.scorecard_summary || 'N/A'}
+								</div>
+								<div>
+									<strong>Runs Scored:</strong> {plateAppearance.runs_scored}
+								</div>
+								<div>
+									<strong>RBIs:</strong> {plateAppearance.rbis}
+								</div>
+								<div>
+									<strong>Outs:</strong> {plateAppearance.outs}
+								</div>
+								<div>
+									<strong>Got on Base:</strong> {plateAppearance.got_on_base ? 'Yes' : 'No'}
+								</div>
+								{plateAppearance.hit_location && (
+									<div>
+										<strong>Hit Location:</strong> {plateAppearance.hit_location}
+									</div>
+								)}
+								{plateAppearance.error_str && (
+									<div className="col-span-2">
+										<strong>Error:</strong> {plateAppearance.error_str}
+									</div>
+								)}
+							</div>
 						</div>
 					</div>
 
@@ -291,10 +326,24 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 							{plateAppearance.events.length > 0 ? (
 								<div className="space-y-2">
 									{plateAppearance.events.map((pitch, index) => (
-										<div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-											<span className="font-medium">{pitch.type}</span>
-											<span className="text-sm text-gray-600">{pitch.description}</span>
-											<span className="text-sm font-bold">{pitch.result}</span>
+										<div key={index} className="p-3 bg-gray-50 rounded border">
+											<div className="flex justify-between items-start mb-2">
+												<div className="flex items-center space-x-3">
+													<span className="font-bold text-lg bg-blue-100 px-2 py-1 rounded">{pitch.type}</span>
+													<span className="text-sm text-gray-600">{pitch.description}</span>
+												</div>
+												<span className="text-sm font-bold text-green-600">{pitch.result}</span>
+											</div>
+											{pitch.speed && (
+												<div className="text-xs text-gray-500">
+													Speed: {pitch.speed} mph
+													{pitch.location && (
+														<span className="ml-2">
+															Location: [{pitch.location[0]?.toFixed(1)}, {pitch.location[1]?.toFixed(1)}]
+														</span>
+													)}
+												</div>
+											)}
 										</div>
 									))}
 								</div>
@@ -307,8 +356,7 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 
 				<button
 					onClick={() => setSelectedPlayer(null)}
-					className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-				>
+					className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
 					Close Details
 				</button>
 			</div>
@@ -327,9 +375,7 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 		<div className="max-w-7xl mx-auto p-6">
 			{/* Header */}
 			<div className="mb-6">
-				<h1 className="text-3xl font-bold text-gray-900 mb-2">
-					Traditional Scorecard
-				</h1>
+				<h1 className="text-3xl font-bold text-gray-900 mb-2">Traditional Scorecard</h1>
 				<div className="flex items-center space-x-4 text-gray-600">
 					<span>{gameData.game_data.game_date_str}</span>
 					<span>•</span>

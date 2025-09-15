@@ -71,6 +71,13 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 	};
 
 	const renderInningScorecard = () => {
+		// Use detailed data if available, otherwise fall back to gameData
+		const innings = detailedData?.innings || gameData.game_data.inning_list;
+		const awayTotal =
+			detailedData?.total_away_runs || gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.away, 0);
+		const homeTotal =
+			detailedData?.total_home_runs || gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.home, 0);
+
 		return (
 			<div className="bg-white rounded-lg shadow-lg p-6">
 				<div className="grid grid-cols-11 gap-2 mb-4">
@@ -85,66 +92,106 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 
 					{/* Away Team */}
 					<div className="col-span-1 font-bold text-right pr-2">{gameData.game_data.away_team.abbreviation}</div>
-					{gameData.game_data.inning_list.map((inning, index) => (
-						<div
-							key={index}
-							className={`text-center p-2 rounded cursor-pointer transition-colors ${
-								selectedInning === inning.inning
-									? 'bg-blue-100 border-2 border-blue-500'
-									: 'bg-gray-50 hover:bg-gray-100'
-							}`}
-							onClick={() => setSelectedInning(inning.inning)}>
-							{inning.away}
-						</div>
-					))}
-					<div className="font-bold text-center bg-blue-100 p-2 rounded">
-						{gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.away, 0)}
-					</div>
+					{Array.from({ length: 9 }, (_, i) => {
+						const inning = innings.find((inn) => inn.inning === i + 1);
+						const runs = inning ? inning.away_runs || inning.away || 0 : 0;
+						return (
+							<div
+								key={i}
+								className={`text-center p-2 rounded cursor-pointer transition-colors ${
+									selectedInning === i + 1 ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50 hover:bg-gray-100'
+								}`}
+								onClick={() => setSelectedInning(i + 1)}>
+								{runs}
+							</div>
+						);
+					})}
+					<div className="font-bold text-center bg-blue-100 p-2 rounded">{awayTotal}</div>
 
 					{/* Home Team */}
 					<div className="col-span-1 font-bold text-right pr-2">{gameData.game_data.home_team.abbreviation}</div>
-					{gameData.game_data.inning_list.map((inning, index) => (
-						<div
-							key={index}
-							className={`text-center p-2 rounded cursor-pointer transition-colors ${
-								selectedInning === inning.inning ? 'bg-red-100 border-2 border-red-500' : 'bg-gray-50 hover:bg-gray-100'
-							}`}
-							onClick={() => setSelectedInning(inning.inning)}>
-							{inning.home}
-						</div>
-					))}
-					<div className="font-bold text-center bg-red-100 p-2 rounded">
-						{gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.home, 0)}
-					</div>
+					{Array.from({ length: 9 }, (_, i) => {
+						const inning = innings.find((inn) => inn.inning === i + 1);
+						const runs = inning ? inning.home_runs || inning.home || 0 : 0;
+						return (
+							<div
+								key={i}
+								className={`text-center p-2 rounded cursor-pointer transition-colors ${
+									selectedInning === i + 1 ? 'bg-red-100 border-2 border-red-500' : 'bg-gray-50 hover:bg-gray-100'
+								}`}
+								onClick={() => setSelectedInning(i + 1)}>
+								{runs}
+							</div>
+						);
+					})}
+					<div className="font-bold text-center bg-red-100 p-2 rounded">{homeTotal}</div>
 				</div>
 
 				{/* Inning Details */}
-				{selectedInning && (
+				{selectedInning && detailedData && (
 					<div className="mt-6 p-4 bg-gray-50 rounded-lg">
 						<h3 className="font-bold text-lg mb-3">Inning {selectedInning} Details</h3>
 						<div className="space-y-2">
-							{/* This would be populated with actual event data */}
-							<div className="flex items-center space-x-4 p-2 bg-white rounded">
-								<div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-									K
-								</div>
-								<div className="flex-1">
-									<span className="font-medium">Strikeout</span>
-									<span className="text-gray-600 ml-2">- Player Name</span>
-								</div>
-								<div className="text-sm text-gray-500">1 out</div>
-							</div>
+							{(() => {
+								const inning = detailedData.innings?.find((inn) => inn.inning === selectedInning);
+								if (!inning) return <div className="text-gray-500">No data available for this inning</div>;
 
-							<div className="flex items-center space-x-4 p-2 bg-white rounded">
-								<div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-									1B
-								</div>
-								<div className="flex-1">
-									<span className="font-medium">Single</span>
-									<span className="text-gray-600 ml-2">- Player Name</span>
-								</div>
-								<div className="text-sm text-gray-500">Runner on 1st</div>
-							</div>
+								const allEvents = [
+									...(inning.top_events || []).map((event) => ({ ...event, half: 'top' })),
+									...(inning.bottom_events || []).map((event) => ({ ...event, half: 'bottom' })),
+								];
+
+								return allEvents.map((event, index) => {
+									const getEventIcon = (summary: string) => {
+										if (summary.includes('Strikeout')) return 'K';
+										if (summary.includes('Single')) return '1B';
+										if (summary.includes('Double')) return '2B';
+										if (summary.includes('Triple')) return '3B';
+										if (summary.includes('Home Run')) return 'HR';
+										if (summary.includes('Walk')) return 'BB';
+										if (summary.includes('Groundout')) return 'GO';
+										if (summary.includes('Flyout')) return 'FO';
+										if (summary.includes('Lineout')) return 'LO';
+										if (summary.includes('Pop Out')) return 'PO';
+										if (summary.includes('Hit By Pitch')) return 'HBP';
+										if (summary.includes('Field Error')) return 'E';
+										return '?';
+									};
+
+									const getEventColor = (summary: string) => {
+										if (summary.includes('Strikeout') || summary.includes('out')) return 'bg-red-500';
+										if (
+											summary.includes('Single') ||
+											summary.includes('Double') ||
+											summary.includes('Triple') ||
+											summary.includes('Home Run')
+										)
+											return 'bg-green-500';
+										if (summary.includes('Walk') || summary.includes('Hit By Pitch')) return 'bg-blue-500';
+										if (summary.includes('Field Error')) return 'bg-yellow-500';
+										return 'bg-gray-500';
+									};
+
+									return (
+										<div key={index} className="flex items-center space-x-4 p-2 bg-white rounded">
+											<div
+												className={`w-8 h-8 ${getEventColor(
+													event.summary
+												)} rounded-full flex items-center justify-center text-white text-sm font-bold`}>
+												{getEventIcon(event.summary)}
+											</div>
+											<div className="flex-1">
+												<span className="font-medium">{event.summary}</span>
+												<span className="text-gray-600 ml-2">- {event.batter}</span>
+												<span className="text-gray-500 ml-2">({event.half === 'top' ? 'Top' : 'Bottom'})</span>
+											</div>
+											<div className="text-sm text-gray-500">
+												{event.outs} out{event.outs !== 1 ? 's' : ''}
+											</div>
+										</div>
+									);
+								});
+							})()}
 						</div>
 					</div>
 				)}
@@ -153,6 +200,11 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 	};
 
 	const renderStats = () => {
+		const awayBatters = detailedData?.batters?.away || [];
+		const homeBatters = detailedData?.batters?.home || [];
+		const awayPitchers = detailedData?.pitchers?.away || [];
+		const homePitchers = detailedData?.pitchers?.home || [];
+
 		return (
 			<div className="bg-white rounded-lg shadow-lg p-6">
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -172,15 +224,24 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 									</tr>
 								</thead>
 								<tbody>
-									{/* This would be populated with actual batter data */}
-									<tr className="border-b">
-										<td className="p-2">Player Name</td>
-										<td className="text-center p-2">4</td>
-										<td className="text-center p-2">2</td>
-										<td className="text-center p-2">1</td>
-										<td className="text-center p-2">2</td>
-										<td className="text-center p-2">.500</td>
-									</tr>
+									{awayBatters.length > 0 ? (
+										awayBatters.map((batter, index) => (
+											<tr key={index} className="border-b">
+												<td className="p-2">{batter.name}</td>
+												<td className="text-center p-2">{batter.at_bats || 0}</td>
+												<td className="text-center p-2">{batter.hits || 0}</td>
+												<td className="text-center p-2">{batter.runs || 0}</td>
+												<td className="text-center p-2">{batter.rbis || 0}</td>
+												<td className="text-center p-2">{batter.average || '.000'}</td>
+											</tr>
+										))
+									) : (
+										<tr className="border-b">
+											<td className="p-2 text-gray-500" colSpan={6}>
+												No batting data available
+											</td>
+										</tr>
+									)}
 								</tbody>
 							</table>
 						</div>
@@ -202,15 +263,24 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 									</tr>
 								</thead>
 								<tbody>
-									{/* This would be populated with actual batter data */}
-									<tr className="border-b">
-										<td className="p-2">Player Name</td>
-										<td className="text-center p-2">4</td>
-										<td className="text-center p-2">1</td>
-										<td className="text-center p-2">0</td>
-										<td className="text-center p-2">0</td>
-										<td className="text-center p-2">.250</td>
-									</tr>
+									{homeBatters.length > 0 ? (
+										homeBatters.map((batter, index) => (
+											<tr key={index} className="border-b">
+												<td className="p-2">{batter.name}</td>
+												<td className="text-center p-2">{batter.at_bats || 0}</td>
+												<td className="text-center p-2">{batter.hits || 0}</td>
+												<td className="text-center p-2">{batter.runs || 0}</td>
+												<td className="text-center p-2">{batter.rbis || 0}</td>
+												<td className="text-center p-2">{batter.average || '.000'}</td>
+											</tr>
+										))
+									) : (
+										<tr className="border-b">
+											<td className="p-2 text-gray-500" colSpan={6}>
+												No batting data available
+											</td>
+										</tr>
+									)}
 								</tbody>
 							</table>
 						</div>
@@ -237,16 +307,25 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 										</tr>
 									</thead>
 									<tbody>
-										{/* This would be populated with actual pitcher data */}
-										<tr className="border-b">
-											<td className="p-2">Pitcher Name</td>
-											<td className="text-center p-2">6.0</td>
-											<td className="text-center p-2">5</td>
-											<td className="text-center p-2">3</td>
-											<td className="text-center p-2">3</td>
-											<td className="text-center p-2">2</td>
-											<td className="text-center p-2">7</td>
-										</tr>
+										{awayPitchers.length > 0 ? (
+											awayPitchers.map((pitcher, index) => (
+												<tr key={index} className="border-b">
+													<td className="p-2">{pitcher.name}</td>
+													<td className="text-center p-2">{pitcher.innings_pitched || '0.0'}</td>
+													<td className="text-center p-2">{pitcher.hits || 0}</td>
+													<td className="text-center p-2">{pitcher.runs || 0}</td>
+													<td className="text-center p-2">{pitcher.earned_runs || 0}</td>
+													<td className="text-center p-2">{pitcher.walks || 0}</td>
+													<td className="text-center p-2">{pitcher.strikeouts || 0}</td>
+												</tr>
+											))
+										) : (
+											<tr className="border-b">
+												<td className="p-2 text-gray-500" colSpan={7}>
+													No pitching data available
+												</td>
+											</tr>
+										)}
 									</tbody>
 								</table>
 							</div>
@@ -268,16 +347,25 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 										</tr>
 									</thead>
 									<tbody>
-										{/* This would be populated with actual pitcher data */}
-										<tr className="border-b">
-											<td className="p-2">Pitcher Name</td>
-											<td className="text-center p-2">7.0</td>
-											<td className="text-center p-2">4</td>
-											<td className="text-center p-2">2</td>
-											<td className="text-center p-2">2</td>
-											<td className="text-center p-2">1</td>
-											<td className="text-center p-2">8</td>
-										</tr>
+										{homePitchers.length > 0 ? (
+											homePitchers.map((pitcher, index) => (
+												<tr key={index} className="border-b">
+													<td className="p-2">{pitcher.name}</td>
+													<td className="text-center p-2">{pitcher.innings_pitched || '0.0'}</td>
+													<td className="text-center p-2">{pitcher.hits || 0}</td>
+													<td className="text-center p-2">{pitcher.runs || 0}</td>
+													<td className="text-center p-2">{pitcher.earned_runs || 0}</td>
+													<td className="text-center p-2">{pitcher.walks || 0}</td>
+													<td className="text-center p-2">{pitcher.strikeouts || 0}</td>
+												</tr>
+											))
+										) : (
+											<tr className="border-b">
+												<td className="p-2 text-gray-500" colSpan={7}>
+													No pitching data available
+												</td>
+											</tr>
+										)}
 									</tbody>
 								</table>
 							</div>
@@ -289,32 +377,111 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 	};
 
 	const renderEvents = () => {
+		if (!detailedData?.innings) {
+			return (
+				<div className="bg-white rounded-lg shadow-lg p-6">
+					<h3 className="font-bold text-lg mb-4">Game Events</h3>
+					<div className="text-gray-500">No event data available</div>
+				</div>
+			);
+		}
+
+		// Flatten all events from all innings
+		const allEvents = [];
+		detailedData.innings.forEach((inning) => {
+			if (inning.top_events) {
+				inning.top_events.forEach((event) => {
+					allEvents.push({
+						...event,
+						inning: inning.inning,
+						half: 'top',
+					});
+				});
+			}
+			if (inning.bottom_events) {
+				inning.bottom_events.forEach((event) => {
+					allEvents.push({
+						...event,
+						inning: inning.inning,
+						half: 'bottom',
+					});
+				});
+			}
+		});
+
 		return (
 			<div className="bg-white rounded-lg shadow-lg p-6">
 				<h3 className="font-bold text-lg mb-4">Game Events</h3>
-				<div className="space-y-3">
-					{/* This would be populated with actual event data */}
-					<div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-						<div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-							1
-						</div>
-						<div className="flex-1">
-							<div className="font-medium">Top 1st</div>
-							<div className="text-sm text-gray-600">Strikeout - Player Name</div>
-						</div>
-						<div className="text-sm text-gray-500">1 out</div>
-					</div>
+				<div className="space-y-3 max-h-96 overflow-y-auto">
+					{allEvents.map((event, index) => {
+						const getEventColor = (summary: string) => {
+							if (summary.includes('Strikeout') || summary.includes('out')) return 'bg-red-500';
+							if (
+								summary.includes('Single') ||
+								summary.includes('Double') ||
+								summary.includes('Triple') ||
+								summary.includes('Home Run')
+							)
+								return 'bg-green-500';
+							if (summary.includes('Walk') || summary.includes('Hit By Pitch')) return 'bg-blue-500';
+							if (summary.includes('Field Error')) return 'bg-yellow-500';
+							return 'bg-gray-500';
+						};
 
-					<div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-						<div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
-							2
-						</div>
-						<div className="flex-1">
-							<div className="font-medium">Top 1st</div>
-							<div className="text-sm text-gray-600">Single - Player Name</div>
-						</div>
-						<div className="text-sm text-gray-500">Runner on 1st</div>
-					</div>
+						return (
+							<div key={index} className="p-4 bg-gray-50 rounded-lg border">
+								<div className="flex items-center space-x-4 mb-2">
+									<div
+										className={`w-10 h-10 ${getEventColor(
+											event.summary
+										)} rounded-full flex items-center justify-center text-white font-bold`}>
+										{index + 1}
+									</div>
+									<div className="flex-1">
+										<div className="font-medium">
+											{event.half === 'top' ? 'Top' : 'Bottom'} {event.inning}
+											{event.inning === 1 ? 'st' : event.inning === 2 ? 'nd' : event.inning === 3 ? 'rd' : 'th'}
+										</div>
+										<div className="text-sm text-gray-600">
+											{event.batter} vs {event.pitcher}
+										</div>
+									</div>
+									<div className="text-sm text-gray-500">
+										{event.outs} out{event.outs !== 1 ? 's' : ''}
+									</div>
+								</div>
+
+								<div className="ml-14">
+									<div className="text-sm font-medium mb-1">
+										{event.summary} - {event.description}
+									</div>
+
+									{event.events && event.events.length > 0 && (
+										<div className="mt-2">
+											<div className="text-xs text-gray-500 mb-1">Pitch Sequence:</div>
+											<div className="flex flex-wrap gap-1">
+												{event.events.map((pitch, pitchIndex) => (
+													<span
+														key={pitchIndex}
+														className="px-2 py-1 bg-white rounded text-xs border"
+														title={`${pitch.type}: ${pitch.description}${pitch.speed ? ` (${pitch.speed} mph)` : ''}`}>
+														{pitch.type}
+													</span>
+												))}
+											</div>
+										</div>
+									)}
+
+									{(event.runs_scored > 0 || event.rbis > 0) && (
+										<div className="mt-1 text-xs text-green-600">
+											{event.runs_scored > 0 && `Runs: ${event.runs_scored} `}
+											{event.rbis > 0 && `RBIs: ${event.rbis}`}
+										</div>
+									)}
+								</div>
+							</div>
+						);
+					})}
 				</div>
 			</div>
 		);
@@ -334,9 +501,11 @@ export default function ModernScorecard({ gameData, gameId }: ModernScorecardPro
 					<span>•</span>
 					<span className="font-semibold">
 						Final: {gameData.game_data.away_team.abbreviation}{' '}
-						{gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.away, 0)} -{' '}
-						{gameData.game_data.home_team.abbreviation}{' '}
-						{gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.home, 0)}
+						{detailedData?.total_away_runs ||
+							gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.away, 0)}{' '}
+						- {gameData.game_data.home_team.abbreviation}{' '}
+						{detailedData?.total_home_runs ||
+							gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.home, 0)}
 					</span>
 				</div>
 			</div>

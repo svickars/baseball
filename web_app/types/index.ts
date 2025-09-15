@@ -37,6 +37,35 @@ export interface GameData {
 	success: boolean;
 }
 
+export interface DetailedGameData {
+	game_id: string;
+	date: string;
+	away_team: {
+		name: string;
+		abbreviation: string;
+	};
+	home_team: {
+		name: string;
+		abbreviation: string;
+	};
+	venue: string;
+	status: string;
+	innings: any[];
+	batters: {
+		away: any[];
+		home: any[];
+	};
+	pitchers: {
+		away: any[];
+		home: any[];
+	};
+	events: any[];
+	integration_status: string;
+	note: string;
+	total_away_runs?: number;
+	total_home_runs?: number;
+}
+
 export interface GamesResponse {
 	date: string;
 	games: Game[];
