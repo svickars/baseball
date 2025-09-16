@@ -51,7 +51,6 @@ export interface GameData {
 		total_away_runs?: number;
 		total_home_runs?: number;
 		status?: string;
-		detailed_data?: any;
 	};
 	svg_content: string;
 	success: boolean;
