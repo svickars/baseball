@@ -43,8 +43,11 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 		// Parse the date string as local date (YYYY-MM-DD format)
 		const [year, month, day] = date.split('-').map(Number);
 
-		// Fetch games from MLB API
-		const response = await fetch(`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}`);
+		// Fetch games from MLB API with cache-busting parameter
+		const timestamp = Date.now();
+		const url = `${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}&t=${timestamp}`;
+
+		const response = await fetch(url);
 
 		if (!response.ok) {
 			throw new Error(`MLB API error: ${response.status}`);
@@ -71,7 +74,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 						startTime = dt.toLocaleTimeString('en-US', {
 							hour: 'numeric',
 							minute: '2-digit',
-							timeZoneName: 'short',
 						});
 					} catch (e) {
 						// Keep original format if parsing fails
@@ -106,7 +108,7 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 					location: `${gameData.venue?.name || ''}, ${gameData.venue?.city || ''}`,
 					status: status.detailedState || 'Unknown',
 					game_pk: gamePk,
-					is_live: status.codedGameState === 'I' || status.codedGameState === 'S',
+					is_live: status.codedGameState === 'I', // Only In Progress games are live
 					inning: gameData.linescore?.currentInning || '',
 					inning_state: gameData.linescore?.inningState || '',
 					away_score: awayScore,
@@ -116,6 +118,11 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 					home_hits: homeHits,
 					away_errors: awayErrors,
 					home_errors: homeErrors,
+					// Include MLB API status data for more reliable status determination
+					mlbStatus: {
+						detailedState: status.detailedState,
+						codedGameState: status.codedGameState,
+					},
 				};
 
 				games.push(game);
@@ -135,7 +142,7 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 				away_code: 'HOU',
 				home_code: 'LAD',
 				game_number: 1,
-				start_time: '8:00 PM EDT',
+				start_time: '8:00 PM',
 				location: 'Dodger Stadium, Los Angeles, CA',
 				status: 'Final',
 				game_pk: 12345,
@@ -231,12 +238,14 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 		const gameNumber = parseInt(parts[5]);
 
 		// First, get the gamePk from the schedule
-		const dateObj = new Date(date);
-		const year = dateObj.getFullYear();
-		const month = dateObj.getMonth() + 1;
-		const day = dateObj.getDate();
+		// Use the same date parsing method as getGamesForDate to avoid timezone issues
+		const [year, month, day] = date.split('-').map(Number);
 
-		const scheduleResponse = await fetch(`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}`);
+		// Add cache-busting parameter to ensure fresh data
+		const timestamp = Date.now();
+		const scheduleResponse = await fetch(
+			`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}&t=${timestamp}`
+		);
 
 		if (!scheduleResponse.ok) {
 			throw new Error(`MLB API error: ${scheduleResponse.status}`);
@@ -366,6 +375,12 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 				inning_list: inningList,
 				is_postponed: status.detailedState === 'Postponed',
 				is_suspended: status.detailedState === 'Suspended',
+				// Include the actual scores
+				away_score: awayScore,
+				home_score: homeScore,
+				total_away_runs: awayScore,
+				total_home_runs: homeScore,
+				status: status.detailedState,
 			},
 			svg_content: generateDetailedSVGFromSchedule(gameData, awayCodeFromName, homeCodeFromName, inningList),
 			success: true,
@@ -817,8 +832,12 @@ export async function getTeams(): Promise<{ teams: { code: string; name: string 
 
 export async function getTodayGames(): Promise<Game[]> {
 	try {
+		// Use local timezone to match frontend behavior
 		const today = new Date();
-		const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+		const year = today.getFullYear();
+		const month = String(today.getMonth() + 1).padStart(2, '0');
+		const day = String(today.getDate()).padStart(2, '0');
+		const dateStr = `${year}-${month}-${day}`;
 		return await getGamesForDate(dateStr);
 	} catch (error) {
 		console.error("Error fetching today's games:", error);

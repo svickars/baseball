@@ -18,15 +18,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 			<body>
 				<ThemeProvider>
 					<BaseballProvider>
-						<div id="app" className="min-h-screen bg-primary-50 dark:bg-primary-900 flex flex-col">
+						<div id="app" className="flex flex-col min-h-screen bg-primary-50 dark:bg-primary-900">
 							<HeaderWrapper />
-							<main className="flex-1 min-h-full flex flex-col">{children}</main>
-							<footer className="bg-primary-50 dark:bg-primary-900 border-t border-primary-400 dark:border-primary-700 py-8 mt-0">
-								<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+							<main className="flex flex-col flex-1 px-6 min-h-full">{children}</main>
+							<footer className="py-8 mt-0 border-t bg-primary-50 dark:bg-primary-900 border-primary-400 dark:border-primary-700">
+								<div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
 									<div className="flex justify-between items-center">
-										<div className="flex items-center gap-4">
-											<p className="text-primary-700 dark:text-primary-300 text-sm">© 2025</p>
-											<p className="text-primary-700 dark:text-primary-300 text-sm">
+										<div className="flex gap-4 items-center">
+											<p className="text-sm text-primary-700 dark:text-primary-300">© 2025</p>
+											<p className="text-sm text-primary-700 dark:text-primary-300">
 												Built with ⚾ using{' '}
 												<a
 													href="https://github.com/benjamincrom/baseball?tab=readme-ov-file"
@@ -40,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 										</div>
 										<a
 											href="/about"
-											className="text-primary-700 dark:text-primary-300 text-sm hover:text-accent-600 dark:hover:text-accent-400 hover:underline">
+											className="text-sm text-primary-700 dark:text-primary-300 hover:text-accent-600 dark:hover:text-accent-400 hover:underline">
 											About this Project
 										</a>
 									</div>

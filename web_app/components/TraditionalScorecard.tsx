@@ -2,11 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { GameData } from '@/types';
+import LoadingSpinner from './LoadingSpinner';
+import * as TeamLogos from './team-logos';
 
 interface TraditionalScorecardProps {
 	gameData: GameData;
 	gameId: string;
 }
+
+// Helper function to get team logo component
+const getTeamLogo = (teamCode: string) => {
+	const LogoComponent = (TeamLogos as any)[teamCode];
+	return LogoComponent ? <LogoComponent size={40} /> : null;
+};
 
 interface DetailedGameData {
 	game_id: string;
@@ -31,6 +39,24 @@ interface DetailedGameData {
 		home: PitcherData[];
 	};
 	events: GameEvent[];
+	// MLB API supplementary data
+	umpires?: Array<{
+		name: string;
+		position: string;
+		id?: string | null;
+	}>;
+	managers?: {
+		away: string | null;
+		home: string | null;
+	};
+	start_time?: string;
+	end_time?: string;
+	weather?: string | { condition: string };
+	wind?: string;
+	uniforms?: {
+		away: string;
+		home: string;
+	};
 }
 
 interface InningData {
@@ -48,60 +74,51 @@ interface PlateAppearance {
 	pitcher_number?: string | number;
 	description: string;
 	summary: string;
-	scorecard_summary?: string;
 	got_on_base: boolean;
-	runs_scored: number;
-	rbis: number;
-	outs: number;
-	half: string;
-	hit_location?: string;
-	error_str?: string;
-	start_datetime?: string;
-	end_datetime?: string;
-	events: PitchEvent[];
-	scoring_runners?: string[];
-	runners_batted_in?: string[];
-	out_runners?: any[];
+	at_bat_result: string;
+	pitches: PitchData[];
 }
 
-interface PitchEvent {
-	type: string;
-	description: string;
+interface PitchData {
+	pitch_type: string;
+	velocity?: number;
 	result: string;
-	speed?: number;
-	location?: number[];
-	datetime?: string;
+	description: string;
 }
 
 interface BatterData {
 	name: string;
-	at_bats: number;
-	hits: number;
-	runs: number;
-	rbis: number;
-	average: string;
 	position: string;
-	lineup_order: number;
+	number?: string | number;
+	at_bats?: number;
+	hits?: number;
+	runs?: number;
+	rbi?: number;
+	walks?: number;
+	strikeouts?: number;
 }
 
 interface PitcherData {
 	name: string;
-	innings_pitched: number;
-	hits: number;
-	runs: number;
-	earned_runs: number;
-	walks: number;
-	strikeouts: number;
-	era: string;
+	position: string;
+	number?: string | number;
+	innings_pitched?: number;
+	pitches?: number;
+	batters_faced?: number;
+	hits?: number;
+	runs?: number;
+	earned_runs?: number;
+	walks?: number;
+	strikeouts?: number;
 }
 
 interface GameEvent {
-	id: string;
 	inning: number;
-	half: string;
+	half_inning: 'top' | 'bottom';
+	event_type: string;
 	description: string;
-	player: string;
-	type: string;
+	batter: string;
+	pitcher: string;
 }
 
 export default function TraditionalScorecard({ gameData, gameId }: TraditionalScorecardProps) {
@@ -109,16 +126,30 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 	const [loading, setLoading] = useState(false);
 	const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 
+	// Log initial game data
+	useEffect(() => {
+		// Component initialized
+	}, [gameData, gameId]);
+
 	useEffect(() => {
 		fetchDetailedData();
 	}, [gameId]);
+
+	// Handle detailed data changes
+	useEffect(() => {
+		if (detailedData) {
+			// Detailed data updated
+		}
+	}, [detailedData]);
 
 	const fetchDetailedData = async () => {
 		setLoading(true);
 		try {
 			const response = await fetch(`/api/game/${gameId}/detailed`);
-			const data = await response.json();
-			setDetailedData(data);
+			if (response.ok) {
+				const data = await response.json();
+				setDetailedData(data);
+			}
 		} catch (error) {
 			console.error('Error fetching detailed data:', error);
 		} finally {
@@ -129,120 +160,568 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 	const renderScorecardGrid = () => {
 		if (!detailedData) return null;
 
-		const maxInnings = Math.max(...detailedData.innings.map((i) => i.inning), 9);
-		const allBatters = [...detailedData.batters.away, ...detailedData.batters.home];
+		// Only show extra innings if there's actual data for them
+		const inningsWithData = detailedData.innings.map((i) => i.inning);
+		const maxInnings = inningsWithData.length > 0 ? Math.max(...inningsWithData) : 9;
+		const displayInnings = Math.max(9, maxInnings); // Always show at least 9 innings
 
 		return (
-			<div className="bg-white rounded-lg shadow-lg p-6 overflow-x-auto">
-				{/* Header */}
-				<div className="mb-4">
-					<h2 className="text-2xl font-bold text-center mb-2">
-						{detailedData.away_team.name} vs {detailedData.home_team.name}
-					</h2>
-					<div className="text-center text-gray-600">
-						{detailedData.date} • {detailedData.venue}
-					</div>
-				</div>
+			<div className="overflow-x-auto min-w-[1152px]">
+				{/* TOP Scorecard (Away Team) */}
+				<div className="mb-4 border-b border-primary-300 dark:border-primary-800">
+					{/* TOP Header Fields */}
+					<div
+						className="grid grid-rows-2 gap-0 border-b border-primary-300 dark:border-primary-800"
+						style={{ gridTemplateColumns: '120px 64px 1fr 1fr 1fr 1fr' }}>
+						{/* TOP Label - spans both rows */}
+						<div className="relative row-span-2 border-r border-primary-300 dark:border-primary-800">
+							<div className="flex justify-start items-center px-2 h-16">
+								<span className="text-2xl font-bold text-primary-900 dark:text-primary-100 font-display">TOP</span>
+							</div>
+						</div>
 
-				{/* Scorecard Grid */}
-				<div className="border-2 border-gray-800">
-					{/* Inning Headers */}
-					<div className="grid grid-cols-12 gap-0 border-b-2 border-gray-800">
-						<div className="col-span-2 p-2 bg-gray-100 font-bold text-center border-r border-gray-400">Player</div>
-						{Array.from({ length: maxInnings }, (_, i) => (
-							<div key={i} className="p-2 bg-gray-100 font-bold text-center border-r border-gray-400">
+						{/* Logo Field - spans both rows */}
+						<div className="flex relative row-span-2 justify-center items-center border-r border-primary-200 dark:border-primary-700">
+							<div className="flex justify-center items-center w-16 h-16">
+								{getTeamLogo(detailedData?.away_team?.abbreviation || '')}
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									LOGO
+								</span>
+							</div>
+						</div>
+
+						{/* Top Row Fields */}
+						<div className="relative col-span-2 border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8 border-b border-primary-200 dark:border-primary-700">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									AWAY TEAM
+								</span>
+								<span className="font-medium text-primary-900 dark:text-primary-100">
+									{detailedData.away_team.name}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8 border-b border-primary-200 dark:border-primary-700">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									START TIME
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.start_time || 'TBD'}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8 border-b border-primary-200 dark:border-primary-700">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									WEATHER
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{typeof detailedData?.weather === 'object'
+										? detailedData.weather.condition
+										: detailedData?.weather || 'TBD'}
+								</span>
+							</div>
+						</div>
+
+						{/* Bottom Row Fields */}
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									MANAGER
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.managers?.away || 'TBD'}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									UNIFORM
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.uniforms?.away
+										? detailedData.uniforms.away
+												.replace(/\([^)]*\)/g, '') // Remove parentheses and content
+												.replace(/"[^"]*"/g, '') // Remove quotes and content
+												.replace(/\b(Blue Jays|Rays|Jersey|Jerseys?)\b/gi, '') // Remove team names and "Jersey"
+												.replace(/\s+/g, ' ') // Clean up extra spaces
+												.trim()
+										: 'TBD'}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									END TIME
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.end_time || 'TBD'}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									WIND
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">{detailedData?.wind || 'TBD'}</span>
+							</div>
+						</div>
+					</div>
+
+					{/* Column Headers */}
+					<div
+						className="grid gap-0 border-b border-primary-300 dark:border-primary-800"
+						style={{
+							gridTemplateColumns: `40px 200px 30px ${Array(displayInnings)
+								.fill('1fr')
+								.join(' ')} 45px 45px 45px 45px 45px 45px`,
+						}}>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							#
+						</div>
+						<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
+							PLAYER
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							POS
+						</div>
+						{Array.from({ length: displayInnings }, (_, i) => (
+							<div
+								key={i}
+								className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 								{i + 1}
 							</div>
 						))}
-						<div className="p-2 bg-gray-100 font-bold text-center">R</div>
-						<div className="p-2 bg-gray-100 font-bold text-center">H</div>
-						<div className="p-2 bg-gray-100 font-bold text-center">RBI</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 text-primary-900 dark:text-primary-100">
+							AB
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							H
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							R
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							RBI
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							BB
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold text-primary-900 dark:text-primary-100">
+							SO
+						</div>
 					</div>
 
 					{/* Away Team Batters */}
-					<div className="border-b-2 border-gray-800">
-						<div className="p-2 bg-blue-50 font-bold text-center border-b border-gray-400">
-							{detailedData.away_team.name} ({detailedData.away_team.abbreviation})
-						</div>
-						{detailedData.batters.away.map((batter, index) => (
-							<div key={index} className="grid grid-cols-12 gap-0 border-b border-gray-300">
-								<div className="col-span-2 p-2 border-r border-gray-400">
-									<div className="font-medium">{batter.name}</div>
-									<div className="text-xs text-gray-600">{batter.position}</div>
+					{detailedData.batters.away.map((batter, index) => (
+						<div
+							key={index}
+							className="grid gap-0 border-b border-primary-200 dark:border-primary-700"
+							style={{
+								gridTemplateColumns: `40px 200px 30px ${Array(displayInnings)
+									.fill('1fr')
+									.join(' ')} 45px 45px 45px 45px 45px 45px`,
+							}}>
+							{/* Player Number */}
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.number || index + 1}
 								</div>
-								{Array.from({ length: maxInnings }, (_, i) => (
-									<div key={i} className="p-2 border-r border-gray-400 text-center">
-										{renderAtBatResult(batter, i + 1)}
-									</div>
-								))}
-								<div className="p-2 border-r border-gray-400 text-center font-bold">{batter.runs}</div>
-								<div className="p-2 border-r border-gray-400 text-center font-bold">{batter.hits}</div>
-								<div className="p-2 text-center font-bold">{batter.rbis}</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+
+							{/* Player Name */}
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-800 h-18">
+								<div className="flex items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+									<span className="font-medium text-2xs text-primary-900 dark:text-primary-100">{batter.name}</span>
+								</div>
+								<div className="flex items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex items-center px-2 h-6 bg-primary-50 dark:bg-primary-800">
+									{/* Third row content */}
+								</div>
+							</div>
+
+							{/* Position */}
+							<div className="flex flex-col border-r border-primary-300 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.position}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+
+							{/* Inning Columns */}
+							{Array.from({ length: displayInnings }, (_, i) => (
+								<div
+									key={i}
+									className="flex justify-center items-center border-r h-fill w-fill border-primary-200 dark:border-primary-700">
+									{/* Square cell for at-bat results */}
+								</div>
+							))}
+
+							{/* Stats Columns */}
+							<div className="flex flex-col border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.at_bats || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.hits || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.runs || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.rbi || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.walks || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.strikeouts || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+						</div>
+					))}
+				</div>
+
+				{/* BOTTOM Scorecard (Home Team) */}
+				<div className="border-b border-primary-300 dark:border-primary-800">
+					{/* BOTTOM Header Fields */}
+					<div
+						className="grid grid-rows-2 gap-0 border-b border-primary-300 dark:border-primary-800"
+						style={{ gridTemplateColumns: '120px 64px 1fr 1fr 1fr 1fr' }}>
+						{/* BOTTOM Label - spans both rows */}
+						<div className="relative row-span-2 border-r border-primary-300 dark:border-primary-800">
+							<div className="flex justify-start items-center px-2 h-16">
+								<span className="text-2xl font-bold text-primary-900 dark:text-primary-100 font-display">BOTTOM</span>
+							</div>
+						</div>
+
+						{/* Logo Field - spans both rows */}
+						<div className="flex relative row-span-2 justify-center items-center border-r border-primary-200 dark:border-primary-700">
+							<div className="flex justify-center items-center w-16 h-16">
+								{getTeamLogo(detailedData?.home_team?.abbreviation || '')}
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									LOGO
+								</span>
+							</div>
+						</div>
+
+						{/* Top Row Fields */}
+						<div className="relative col-span-2 border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8 border-b border-primary-200 dark:border-primary-700">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									HOME TEAM
+								</span>
+								<span className="font-medium text-primary-900 dark:text-primary-100">
+									{detailedData.home_team.name}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8 border-b border-primary-200 dark:border-primary-700">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									HP UMPIRE
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.umpires?.find((u) => u.position === 'HP')?.name || 'TBD'}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8 border-b border-primary-200 dark:border-primary-700">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									1B UMPIRE
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.umpires?.find((u) => u.position === '1B')?.name || 'TBD'}
+								</span>
+							</div>
+						</div>
+
+						{/* Bottom Row Fields */}
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									MANAGER
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.managers?.home || 'TBD'}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									UNIFORM
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.uniforms?.home
+										? detailedData.uniforms.home
+												.replace(/\([^)]*\)/g, '') // Remove parentheses and content
+												.replace(/"[^"]*"/g, '') // Remove quotes and content
+												.replace(/\b(Blue Jays|Rays|Jersey|Jerseys?)\b/gi, '') // Remove team names and "Jersey"
+												.replace(/\s+/g, ' ') // Clean up extra spaces
+												.trim()
+										: 'TBD'}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									2B UMPIRE
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.umpires?.find((u) => u.position === '2B')?.name || 'TBD'}
+								</span>
+							</div>
+						</div>
+						<div className="relative border-r border-primary-200 dark:border-primary-700">
+							<div className="flex items-center px-2 h-8">
+								<span className="absolute top-1 right-1 uppercase text-2xs text-primary-500 dark:text-primary-400">
+									3B UMPIRE
+								</span>
+								<span className="text-sm text-primary-900 dark:text-primary-100">
+									{detailedData?.umpires?.find((u) => u.position === '3B')?.name || 'TBD'}
+								</span>
+							</div>
+						</div>
+					</div>
+
+					{/* Column Headers */}
+					<div
+						className="grid gap-0 border-b border-primary-300 dark:border-primary-800"
+						style={{
+							gridTemplateColumns: `40px 200px 30px ${Array(displayInnings)
+								.fill('1fr')
+								.join(' ')} 45px 45px 45px 45px 45px 45px`,
+						}}>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							#
+						</div>
+						<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
+							PLAYER
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							POS
+						</div>
+						{Array.from({ length: displayInnings }, (_, i) => (
+							<div
+								key={i}
+								className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+								{i + 1}
 							</div>
 						))}
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 text-primary-900 dark:text-primary-100">
+							AB
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							H
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							R
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							RBI
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+							BB
+						</div>
+						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold text-primary-900 dark:text-primary-100">
+							SO
+						</div>
 					</div>
 
 					{/* Home Team Batters */}
-					<div>
-						<div className="p-2 bg-red-50 font-bold text-center border-b border-gray-400">
-							{detailedData.home_team.name} ({detailedData.home_team.abbreviation})
-						</div>
-						{detailedData.batters.home.map((batter, index) => (
-							<div key={index} className="grid grid-cols-12 gap-0 border-b border-gray-300">
-								<div className="col-span-2 p-2 border-r border-gray-400">
-									<div className="font-medium">{batter.name}</div>
-									<div className="text-xs text-gray-600">{batter.position}</div>
+					{detailedData.batters.home.map((batter, index) => (
+						<div
+							key={index}
+							className="grid gap-0 border-b border-primary-200 dark:border-primary-700"
+							style={{
+								gridTemplateColumns: `40px 200px 30px ${Array(displayInnings)
+									.fill('1fr')
+									.join(' ')} 45px 45px 45px 45px 45px 45px`,
+							}}>
+							{/* Player Number */}
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.number || index + 1}
 								</div>
-								{Array.from({ length: maxInnings }, (_, i) => (
-									<div key={i} className="p-2 border-r border-gray-400 text-center">
-										{renderAtBatResult(batter, i + 1)}
-									</div>
-								))}
-								<div className="p-2 border-r border-gray-400 text-center font-bold">{batter.runs}</div>
-								<div className="p-2 border-r border-gray-400 text-center font-bold">{batter.hits}</div>
-								<div className="p-2 text-center font-bold">{batter.rbis}</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
 							</div>
-						))}
-					</div>
-				</div>
 
-				{/* Inning Totals */}
-				<div className="mt-4 grid grid-cols-12 gap-0 border-2 border-gray-800">
-					<div className="col-span-2 p-2 bg-gray-100 font-bold text-center border-r border-gray-400">Runs</div>
-					{Array.from({ length: maxInnings }, (_, i) => (
-						<div key={i} className="p-2 bg-gray-100 font-bold text-center border-r border-gray-400">
-							{detailedData.innings[i]?.away_runs || 0} - {detailedData.innings[i]?.home_runs || 0}
+							{/* Player Name */}
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-800 h-18">
+								<div className="flex items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+									<span className="font-medium text-2xs text-primary-900 dark:text-primary-100">{batter.name}</span>
+								</div>
+								<div className="flex items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex items-center px-2 h-6 bg-primary-50 dark:bg-primary-800">
+									{/* Third row content */}
+								</div>
+							</div>
+
+							{/* Position */}
+							<div className="flex flex-col border-r border-primary-300 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.position}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+
+							{/* Inning Columns */}
+							{Array.from({ length: displayInnings }, (_, i) => (
+								<div
+									key={i}
+									className="flex justify-center items-center w-full h-full border-r border-primary-200 dark:border-primary-700">
+									{/* Square cell for at-bat results */}
+								</div>
+							))}
+
+							{/* Stats Columns */}
+							<div className="flex flex-col border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.at_bats || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.hits || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.runs || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.rbi || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.walks || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
+							<div className="flex flex-col h-18">
+								<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{batter.strikeouts || 0}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{/* Second row content */}
+								</div>
+								<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{/* Third row content */}
+								</div>
+							</div>
 						</div>
 					))}
-					<div className="p-2 bg-gray-100 font-bold text-center">
-						{detailedData.innings.reduce((sum, inning) => sum + inning.away_runs, 0)} -{' '}
-						{detailedData.innings.reduce((sum, inning) => sum + inning.home_runs, 0)}
-					</div>
 				</div>
-			</div>
-		);
-	};
-
-	const renderAtBatResult = (batter: BatterData, inning: number) => {
-		// Find the plate appearance for this batter in this inning
-		const inningData = detailedData?.innings.find((i) => i.inning === inning);
-		if (!inningData) return '';
-
-		const plateAppearance = [...inningData.top_events, ...inningData.bottom_events].find(
-			(pa) => pa.batter === batter.name
-		);
-
-		if (!plateAppearance) return '';
-
-		// Render the result with appropriate styling
-		const result = plateAppearance.summary || plateAppearance.description;
-
-		return (
-			<div
-				className="cursor-pointer hover:bg-gray-100 p-1 rounded"
-				onClick={() => setSelectedPlayer(`${batter.name}-${inning}`)}
-				title={`Click for details: ${plateAppearance.description}`}>
-				{result}
 			</div>
 		);
 	};
@@ -263,102 +742,62 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 		if (!plateAppearance) return null;
 
 		return (
-			<div className="mt-6 bg-gray-50 rounded-lg p-4">
-				<h3 className="font-bold text-lg mb-3">
+			<div className="p-4 mt-6 rounded-lg bg-primary-50 dark:bg-primary-700">
+				<h3 className="mb-3 text-lg font-bold text-primary-900 dark:text-primary-100">
 					{playerName} - Inning {inningNum} Details
 				</h3>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 					<div>
-						<h4 className="font-semibold mb-2">At-Bat Summary</h4>
-						<div className="bg-white p-3 rounded border">
+						<h4 className="mb-2 font-semibold text-primary-900 dark:text-primary-100">At-Bat Summary</h4>
+						<div className="p-3 bg-white rounded border dark:bg-primary-800 border-primary-200 dark:border-primary-600">
 							<div className="grid grid-cols-2 gap-2 text-sm">
-								<div>
+								<div className="text-primary-900 dark:text-primary-100">
 									<strong>Batter:</strong> {plateAppearance.batter}
 									{plateAppearance.batter_number && (
-										<span className="ml-1 text-gray-500">#{plateAppearance.batter_number}</span>
+										<span className="ml-1 text-primary-500 dark:text-primary-400">
+											#{plateAppearance.batter_number}
+										</span>
 									)}
 								</div>
-								<div>
+								<div className="text-primary-900 dark:text-primary-100">
 									<strong>Pitcher:</strong> {plateAppearance.pitcher}
 									{plateAppearance.pitcher_number && (
-										<span className="ml-1 text-gray-500">#{plateAppearance.pitcher_number}</span>
+										<span className="ml-1 text-primary-500 dark:text-primary-400">
+											#{plateAppearance.pitcher_number}
+										</span>
 									)}
 								</div>
-								<div className="col-span-2">
-									<strong>Result:</strong> {plateAppearance.description}
+								<div className="col-span-2 text-primary-900 dark:text-primary-100">
+									<strong>Result:</strong> {plateAppearance.at_bat_result}
 								</div>
-								<div>
-									<strong>Summary:</strong> {plateAppearance.summary}
+								<div className="col-span-2 text-primary-900 dark:text-primary-100">
+									<strong>Description:</strong> {plateAppearance.description}
 								</div>
-								<div>
-									<strong>Scorecard:</strong> {plateAppearance.scorecard_summary || 'N/A'}
-								</div>
-								<div>
-									<strong>Runs Scored:</strong> {plateAppearance.runs_scored}
-								</div>
-								<div>
-									<strong>RBIs:</strong> {plateAppearance.rbis}
-								</div>
-								<div>
-									<strong>Outs:</strong> {plateAppearance.outs}
-								</div>
-								<div>
-									<strong>Got on Base:</strong> {plateAppearance.got_on_base ? 'Yes' : 'No'}
-								</div>
-								{plateAppearance.hit_location && (
-									<div>
-										<strong>Hit Location:</strong> {plateAppearance.hit_location}
-									</div>
-								)}
-								{plateAppearance.error_str && (
-									<div className="col-span-2">
-										<strong>Error:</strong> {plateAppearance.error_str}
-									</div>
-								)}
 							</div>
 						</div>
 					</div>
 
 					<div>
-						<h4 className="font-semibold mb-2">Pitch Sequence</h4>
-						<div className="bg-white p-3 rounded border">
-							{plateAppearance.events.length > 0 ? (
+						<h4 className="mb-2 font-semibold text-primary-900 dark:text-primary-100">Pitch Sequence</h4>
+						<div className="p-3 bg-white rounded border dark:bg-primary-800 border-primary-200 dark:border-primary-600">
+							{plateAppearance.pitches && plateAppearance.pitches.length > 0 ? (
 								<div className="space-y-2">
-									{plateAppearance.events.map((pitch, index) => (
-										<div key={index} className="p-3 bg-gray-50 rounded border">
-											<div className="flex justify-between items-start mb-2">
-												<div className="flex items-center space-x-3">
-													<span className="font-bold text-lg bg-blue-100 px-2 py-1 rounded">{pitch.type}</span>
-													<span className="text-sm text-gray-600">{pitch.description}</span>
-												</div>
-												<span className="text-sm font-bold text-green-600">{pitch.result}</span>
-											</div>
-											{pitch.speed && (
-												<div className="text-xs text-gray-500">
-													Speed: {pitch.speed} mph
-													{pitch.location && (
-														<span className="ml-2">
-															Location: [{pitch.location[0]?.toFixed(1)}, {pitch.location[1]?.toFixed(1)}]
-														</span>
-													)}
-												</div>
-											)}
+									{plateAppearance.pitches.map((pitch, index) => (
+										<div key={index} className="flex justify-between items-center text-sm">
+											<span className="text-primary-900 dark:text-primary-100">
+												Pitch {index + 1}: {pitch.pitch_type}
+											</span>
+											<span className="text-primary-600 dark:text-primary-400">{pitch.result}</span>
 										</div>
 									))}
 								</div>
 							) : (
-								<div className="text-gray-500 text-sm">No pitch details available</div>
+								<div className="text-sm text-primary-600 dark:text-primary-400">No pitch data available</div>
 							)}
 						</div>
 					</div>
 				</div>
-
-				<button
-					onClick={() => setSelectedPlayer(null)}
-					className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
-					Close Details
-				</button>
 			</div>
 		);
 	};
@@ -366,47 +805,18 @@ export default function TraditionalScorecard({ gameData, gameId }: TraditionalSc
 	if (loading) {
 		return (
 			<div className="flex justify-center items-center py-12">
-				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+				<LoadingSpinner message="Loading game data..." />
 			</div>
 		);
 	}
 
 	return (
-		<div className="max-w-7xl mx-auto p-6">
-			{/* Header */}
-			<div className="mb-6">
-				<h1 className="text-3xl font-bold text-gray-900 mb-2">Traditional Scorecard</h1>
-				<div className="flex items-center space-x-4 text-gray-600">
-					<span>{gameData.game_data.game_date_str}</span>
-					<span>•</span>
-					<span>{gameData.game_data.location}</span>
-					<span>•</span>
-					<span className="font-semibold">
-						Final: {gameData.game_data.away_team.abbreviation}{' '}
-						{gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.away, 0)} -{' '}
-						{gameData.game_data.home_team.abbreviation}{' '}
-						{gameData.game_data.inning_list.reduce((sum, inning) => sum + inning.home, 0)}
-					</span>
-				</div>
-			</div>
-
+		<div>
 			{/* Traditional Scorecard Grid */}
 			{renderScorecardGrid()}
 
 			{/* Pitch Details */}
 			{renderPitchDetails()}
-
-			{/* Integration Status */}
-			<div className="mt-8 p-4 bg-blue-50 rounded-lg">
-				<h3 className="font-semibold text-blue-900 mb-2">Traditional Scorecard Features</h3>
-				<ul className="text-blue-800 text-sm list-disc list-inside">
-					<li>Traditional hand-done scorecard layout with innings as columns and players as rows</li>
-					<li>Click on any at-bat result to see detailed pitch sequence</li>
-					<li>Real-time integration with Baseball library for detailed game data</li>
-					<li>Pitch-by-pitch breakdown with locations, speeds, and results</li>
-					<li>Complete batting and pitching statistics</li>
-				</ul>
-			</div>
 		</div>
 	);
 }

@@ -27,8 +27,4 @@ const ARI: React.FC<ARIProps> = ({ size = 100 }) => {
 	);
 };
 
-ARI;
-
-ARI;
-
 export default ARI;

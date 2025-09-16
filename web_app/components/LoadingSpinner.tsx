@@ -13,11 +13,11 @@ export default function LoadingSpinner({ message = 'Loading...', size = 'md' }: 
 	};
 
 	return (
-		<div className="flex flex-col items-center justify-center py-12">
-			<div className={`bg-white rounded-lg p-2 mb-4 ${sizeClasses[size]}`}>
-				<img src="/images/loader.gif" alt="Loading..." className="w-full h-full object-contain" />
+		<div className="flex flex-col justify-center items-center py-12">
+			<div className={`p-2 mb-4 bg-white rounded-lg ${sizeClasses[size]}`}>
+				<img src="/images/loader.gif" alt="Loading..." className="object-contain w-full h-full" />
 			</div>
-			<p className="text-secondary-600 dark:text-secondary-400 font-medium">{message}</p>
+			<p className="font-medium text-secondary-600 dark:text-secondary-400">{message}</p>
 		</div>
 	);
 }

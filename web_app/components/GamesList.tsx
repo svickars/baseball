@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Game } from '@/types';
-import { formatDate, formatTime, getStatusColor, isGameLive, isGameFinal, isGameUpcoming } from '@/lib/utils';
+import { formatDate, formatTime, getStatusColor, getGameStatusFromMLB } from '@/lib/utils';
 import { Clock, MapPin, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import * as TeamLogos from './team-logos';
@@ -384,11 +384,8 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 	if (games.length === 0) {
 		return (
 			<section className="my-8">
-				<h2 className="text-xl font-semibold text-accent-900 dark:text-accent-100 mb-6">
-					Games for {formatDate(selectedDate)}
-				</h2>
-				<div className="bg-primary-50 dark:bg-primary-800 rounded-xl shadow-sm border border-primary-200 dark:border-primary-700 p-12 text-center">
-					<h3 className="text-lg font-semibold text-accent-900 dark:text-accent-100 mb-2">No games found</h3>
+				<div className="p-12 text-center rounded-xl border shadow-sm bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+					<h3 className="mb-2 text-lg font-semibold text-accent-900 dark:text-accent-100">No games found</h3>
 					<p className="text-primary-600 dark:text-primary-400">
 						No games were scheduled for {formatDate(selectedDate)}.
 					</p>
@@ -398,46 +395,63 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 	}
 
 	return (
-		<section className="flex-1 flex flex-col">
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 flex-1">
+		<section className="flex flex-col flex-1">
+			<div className="grid flex-1 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
 				{gamesWithDetails.map((game: GameWithDetails) => {
-					const isLive = isGameLive(game);
-					const isFinal = isGameFinal(game);
-					const isUpcoming = isGameUpcoming(game);
-					const statusClass = game.status.toLowerCase().replace(/\s+/g, '-');
+					// Console log all game data for debugging
+					console.log('🎮 GamesList - Game Data:', {
+						id: game.id,
+						away_team: game.away_team,
+						home_team: game.home_team,
+						away_code: game.away_code,
+						home_code: game.home_code,
+						away_score: game.away_score,
+						home_score: game.home_score,
+						status: game.status,
+						mlbStatus: game.mlbStatus,
+						game_pk: game.game_pk,
+						is_live: game.is_live,
+						inning: game.inning,
+						inning_state: game.inning_state,
+						detailedData: game.detailedData,
+					});
 
-					// Determine status display
-					let statusDisplay = '';
-					let statusClassModifier = '';
-					if (isLive) {
-						statusDisplay = 'LIVE';
-						statusClassModifier = 'live';
-					} else if (isFinal) {
-						statusDisplay = 'FINAL';
-						statusClassModifier = 'final';
-					} else if (isUpcoming) {
-						statusDisplay = 'UPCOMING';
-						statusClassModifier = 'upcoming';
-					}
+					// Use MLB API status data for more reliable status determination
+					// Use MLB API status as the primary and only source of truth
+					const gameStatus = game.mlbStatus
+						? getGameStatusFromMLB(game.mlbStatus)
+						: {
+								status: 'unknown',
+								displayText: 'UNKNOWN',
+						  };
+
+					const isLive = gameStatus.status === 'live';
+					const isFinal = gameStatus.status === 'final';
+					const isUpcoming = gameStatus.status === 'upcoming';
+					const statusClass = gameStatus.status;
+
+					// Determine status display using MLB API data
+					const statusDisplay = gameStatus.displayText;
+					const statusClassModifier = gameStatus.status;
 
 					return (
 						<Link
 							key={game.id}
 							href={`/game/${game.id}`}
-							className={`game-card ${statusClassModifier ? statusClassModifier : ''} block`}>
+							className={`game-card ${statusClassModifier ? statusClassModifier : 'block'}`}>
 							<div className="flex justify-between items-start mb-3">
-								<h3 className="text-lg font-semibold text-secondary-900 dark:text-secondary-100 flex items-center w-full">
+								<h3 className="flex items-center w-full text-lg font-semibold text-secondary-900 dark:text-secondary-100">
 									{/* Away Team */}
-									<div className="flex items-center gap-2 justify-start flex-1">
+									<div className="flex flex-1 gap-2 justify-start items-center">
 										{getTeamLogo(game.away_code)}
 										<span className="translate-y-0.5">{getTeamName(game.away_team)}</span>
 									</div>
 									{/* @ Symbol */}
-									<div className="flex justify-center px-4 flex-shrink">
+									<div className="flex flex-shrink justify-center px-4">
 										<span className="translate-y-0.5">@</span>
 									</div>
 									{/* Home Team */}
-									<div className="flex items-center gap-2 justify-end flex-1">
+									<div className="flex flex-1 gap-2 justify-end items-center">
 										<span className="translate-y-0.5">{getTeamName(game.home_team)}</span>
 										{getTeamLogo(game.home_code)}
 									</div>
@@ -445,7 +459,7 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 							</div>
 
 							{isLive && game.inning && (
-								<div className="text-center text-success-600 dark:text-success-400 font-medium mb-3 font-mono">
+								<div className="mb-3 font-mono font-medium text-center text-success-600 dark:text-success-400">
 									{game.inning}
 									{game.inning_state ? ` ${game.inning_state}` : ''}
 								</div>
@@ -455,50 +469,50 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 							<div className="-mx-6">
 								<div className="flex text-xs">
 									{/* Game Time */}
-									<div className="border-r border-primary-200 dark:border-primary-700 h-6 flex items-center gap-1 px-2 flex-shrink-0">
+									<div className="flex flex-shrink-0 gap-1 items-center px-2 h-6 border-r border-primary-200 dark:border-primary-700">
 										{/* <Clock className="w-3 h-3" /> */}
 										<span className="translate-y-0.5">{game.start_time}</span>
 									</div>
 									{/* Stadium */}
-									<div className="h-6 flex items-center px-2 flex-grow">
+									<div className="flex flex-grow items-center px-2 h-6">
 										<span className="text-xs truncate">{formatStadiumLocation(game.location)}</span>
 									</div>
 									{/* Game Status */}
-									<div className="h-6 flex items-center justify-center px-0 flex-shrink-0">
+									<div className="flex flex-shrink-0 justify-center items-center px-0 h-6">
 										{statusDisplay && (
-											<span className={`status-indicator h-full ${statusClassModifier}`}>{statusDisplay}</span>
+											<span className={`h-full status-indicator ${statusClassModifier}`}>{statusDisplay}</span>
 										)}
 									</div>
 								</div>
 							</div>
 
 							{/* Inning Score Grid */}
-							<div className="border-t border-primary-200 dark:border-primary-700 -mx-6 -mb-6">
+							<div className="-mx-6 -mb-6 border-t border-primary-200 dark:border-primary-700">
 								{(() => {
 									const inningsToShow = getInningsToDisplay(game);
 									const totalColumns = inningsToShow + 4; // innings + team + R + H + E
 
 									return (
 										<div
-											className={`grid ${getGridColsClass(
+											className={`grid text-xs border-t border-b ${getGridColsClass(
 												totalColumns
-											)} text-xs border-b border-t border-primary-300 dark:border-primary-700`}>
+											)} border-primary-300 dark:border-primary-700`}>
 											{/* Header Row */}
-											<div className="bg-primary-50 dark:bg-primary-800 border-r border-primary-300 dark:border-primary-700 h-6"></div>
+											<div className="h-6 border-r bg-primary-50 dark:bg-primary-800 border-primary-300 dark:border-primary-700"></div>
 											{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => (
 												<div
 													key={inning}
-													className="bg-primary-50 dark:bg-primary-900 border-r border-primary-200 dark:border-primary-700 h-6 flex items-center justify-center font-medium">
+													className="flex justify-center items-center h-6 font-medium border-r bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-700">
 													{inning}
 												</div>
 											))}
-											<div className="bg-primary-50 dark:bg-primary-900 border-r border-r-primary-200 border-l border-l-primary-300 dark:border-primary-600 h-6 flex items-center justify-center font-medium">
+											<div className="flex justify-center items-center h-6 font-medium border-r border-l bg-primary-50 dark:bg-primary-900 border-r-primary-200 border-l-primary-300 dark:border-primary-600">
 												R
 											</div>
-											<div className="bg-primary-50 dark:bg-primary-900 border-r border-primary-200 dark:border-primary-600 h-6 flex items-center justify-center font-medium">
+											<div className="flex justify-center items-center h-6 font-medium border-r bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-600">
 												H
 											</div>
-											<div className="bg-primary-50 dark:bg-primary-900 h-6 flex items-center justify-center font-medium">
+											<div className="flex justify-center items-center h-6 font-medium bg-primary-50 dark:bg-primary-900">
 												E
 											</div>
 										</div>
@@ -512,10 +526,10 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 
 									return (
 										<div
-											className={`grid ${getGridColsClass(
+											className={`grid text-xs border-b ${getGridColsClass(
 												totalColumns
-											)} text-xs border-b border-primary-200	dark:border-primary-700`}>
-											<div className="bg-primary-50 dark:bg-primary-900 border-r border-primary-300 dark:border-primary-700 h-6 flex items-center justify-end px-1 font-semibold text-primary-900 dark:text-primary-100">
+											)} border-primary-200 dark:border-primary-700`}>
+											<div className="flex justify-end items-center px-1 h-6 font-semibold border-r bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 												{game.away_code}
 											</div>
 											{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => {
@@ -531,13 +545,13 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 													</div>
 												);
 											})}
-											<div className="bg-primary-50 dark:bg-primary-900 font-mono border-r border-r-primary-200 border-l border-l-primary-300 dark:border-primary-600 h-6 flex items-center justify-center font-bold">
+											<div className="flex justify-center items-center h-6 font-mono font-bold border-r border-l bg-primary-50 dark:bg-primary-900 border-r-primary-200 border-l-primary-300 dark:border-primary-600">
 												{game.away_score || 0}
 											</div>
-											<div className="bg-primary-50 dark:bg-primary-900 font-mono border-r border-primary-200 dark:border-primary-600 h-6 flex items-center justify-center">
+											<div className="flex justify-center items-center h-6 font-mono border-r bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-600">
 												{game.detailedData?.away_hits || game.away_hits || '-'}
 											</div>
-											<div className="bg-primary-50 dark:bg-primary-900 font-mono h-6 flex items-center justify-center">
+											<div className="flex justify-center items-center h-6 font-mono bg-primary-50 dark:bg-primary-900">
 												{game.detailedData?.away_errors || game.away_errors || '-'}
 											</div>
 										</div>
@@ -551,10 +565,10 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 
 									return (
 										<div
-											className={`grid ${getGridColsClass(
+											className={`grid text-xs border-b ${getGridColsClass(
 												totalColumns
-											)} text-xs border-b border-primary-200	dark:border-primary-700`}>
-											<div className="bg-primary-50 dark:bg-primary-900 border-r border-primary-300 dark:border-primary-700 h-6 flex items-center justify-end px-1 font-semibold text-primary-900 dark:text-primary-100">
+											)} border-primary-200 dark:border-primary-700`}>
+											<div className="flex justify-end items-center px-1 h-6 font-semibold border-r bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 												{game.home_code}
 											</div>
 											{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => {
@@ -570,13 +584,13 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 													</div>
 												);
 											})}
-											<div className="bg-primary-50 dark:bg-primary-900 font-mono border-r border-r-primary-200 border-l border-l-primary-300 dark:border-primary-600 h-6 flex items-center justify-center font-bold">
+											<div className="flex justify-center items-center h-6 font-mono font-bold border-r border-l bg-primary-50 dark:bg-primary-900 border-r-primary-200 border-l-primary-300 dark:border-primary-600">
 												{game.home_score || 0}
 											</div>
-											<div className="bg-primary-50 dark:bg-primary-900 font-mono border-r border-primary-200 dark:border-primary-600 h-6 flex items-center justify-center">
+											<div className="flex justify-center items-center h-6 font-mono border-r bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-600">
 												{game.detailedData?.home_hits || game.home_hits || '-'}
 											</div>
-											<div className="bg-primary-50 dark:bg-primary-900 font-mono h-6 flex items-center justify-center">
+											<div className="flex justify-center items-center h-6 font-mono bg-primary-50 dark:bg-primary-900">
 												{game.detailedData?.home_errors || game.home_errors || '-'}
 											</div>
 										</div>

@@ -23,6 +23,11 @@ export interface Game {
 	home_hits?: number;
 	away_errors?: number;
 	home_errors?: number;
+	// MLB API status data for more reliable status determination
+	mlbStatus?: {
+		detailedState?: string;
+		codedGameState?: string;
+	};
 }
 
 export interface GameData {

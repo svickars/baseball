@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getGamesForDate } from '@/lib/baseball-service';
+import { getTodayLocalDate } from '@/lib/utils';
 
 export async function GET() {
 	try {
-		const today = new Date();
-		const dateStr = today.toISOString().split('T')[0];
+		// Use the same timezone calculation as the frontend
+		const dateStr = getTodayLocalDate();
 
 		const gamesData = await getGamesForDate(dateStr);
 

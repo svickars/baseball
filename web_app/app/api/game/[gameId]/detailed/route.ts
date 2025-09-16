@@ -25,11 +25,13 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 			let error = '';
 
 			python.stdout.on('data', (data) => {
-				output += data.toString();
+				const chunk = data.toString();
+				output += chunk;
 			});
 
 			python.stderr.on('data', (data) => {
-				error += data.toString();
+				const chunk = data.toString();
+				error += chunk;
 			});
 
 			python.on('close', (code) => {
@@ -38,11 +40,12 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 						const result = JSON.parse(output);
 						resolve(NextResponse.json(result));
 					} catch (parseError) {
+						console.error('Failed to parse Python output:', parseError);
 						resolve(
 							NextResponse.json(
 								{
 									error: 'Failed to parse Python output',
-									output,
+									output: output.substring(0, 500),
 									stderr: error,
 								},
 								{ status: 500 }
@@ -50,6 +53,7 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 						);
 					}
 				} else {
+					console.error('Python script failed with code:', code);
 					resolve(
 						NextResponse.json(
 							{

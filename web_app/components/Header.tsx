@@ -89,15 +89,13 @@ export default function Header({ onLoadGames, isLoading, onNavigateToGames, sele
 											id="gameDate"
 											value={currentDate}
 											onChange={(e) => {
-												console.log('Date input onChange triggered:', e.target.value);
 												handleDateChange(e.target.value);
 											}}
 											onClick={(e) => {
-												console.log('Date input clicked!');
 												(e.target as HTMLInputElement).showPicker?.();
 											}}
 											onFocus={(e) => {
-												console.log('Date input focused!');
+												// Date input focused
 											}}
 											className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
 											max={getTodayLocalDate()} // Don't allow future dates
@@ -106,7 +104,7 @@ export default function Header({ onLoadGames, isLoading, onNavigateToGames, sele
 										<div
 											className="input text-sm w-full cursor-pointer flex items-center gap-2 pointer-events-none"
 											onClick={(e) => {
-												console.log('Visible div clicked!');
+												// Visible div clicked
 											}}>
 											<Calendar className="w-4 h-4 text-primary-500" />
 											<span>{formatDateInTimezone(currentDate, "EEE, MMM d, 'yy")}</span>

@@ -15,6 +15,7 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 
 		return NextResponse.json({
 			game_id: gameId,
+			game: gameData.game_data, // Include basic game data for compatibility
 			game_data: gameData.game_data,
 			svg_content: gameData.svg_content,
 			success: true,

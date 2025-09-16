@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Game, GameData, GameControls } from '@/types';
 import { baseballApi } from '@/lib/api';
-import { isGameLive, getTodayLocalDate } from '@/lib/utils';
+import { getGameStatusFromMLB, getTodayLocalDate } from '@/lib/utils';
 
 export function useBaseballApp() {
 	const [games, setGames] = useState<Game[]>([]);
@@ -42,8 +42,18 @@ export function useBaseballApp() {
 				setSelectedDate(date);
 				setView('games');
 
-				// Track live games
-				const liveGameIds = new Set(response.games.filter((game) => isGameLive(game)).map((game) => game.id));
+				// Track live games using MLB API status
+				const liveGameIds = new Set(
+					response.games
+						.filter((game) => {
+							if (game.mlbStatus) {
+								const { status } = getGameStatusFromMLB(game.mlbStatus);
+								return status === 'live';
+							}
+							return false;
+						})
+						.map((game) => game.id)
+				);
 				setLiveGames(liveGameIds);
 
 				// Start auto-refresh if there are live games
@@ -112,8 +122,18 @@ export function useBaseballApp() {
 					if (response.success) {
 						setGames(response.games);
 
-						// Update live games tracking
-						const liveGameIds = new Set(response.games.filter((game) => isGameLive(game)).map((game) => game.id));
+						// Update live games tracking using MLB API status
+						const liveGameIds = new Set(
+							response.games
+								.filter((game) => {
+									if (game.mlbStatus) {
+										const { status } = getGameStatusFromMLB(game.mlbStatus);
+										return status === 'live';
+									}
+									return false;
+								})
+								.map((game) => game.id)
+						);
 						setLiveGames(liveGameIds);
 
 						// Stop auto-refresh if no more live games

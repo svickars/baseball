@@ -97,45 +97,55 @@ export function getStatusColor(status: string): string {
 	return 'bg-secondary-100 text-secondary-800';
 }
 
-export function isGameLive(game: {
-	status: string;
-	is_live?: boolean;
-	start_time?: string;
-	away_score?: number;
-	home_score?: number;
-}): boolean {
-	const statusLower = game.status.toLowerCase();
+// New utility functions that use MLB API status data more reliably
+export function getGameStatusFromMLB(mlbStatus: { detailedState?: string; codedGameState?: string }): {
+	status: 'live' | 'final' | 'upcoming' | 'postponed' | 'suspended' | 'unknown';
+	displayText: string;
+} {
+	const detailedState = mlbStatus.detailedState?.toLowerCase() || '';
+	const codedState = mlbStatus.codedGameState || '';
 
-	// Game is live if it's actively in progress
-	return (
-		statusLower.includes('in progress') ||
-		statusLower.includes('live') ||
-		(!!game.is_live && !isGameFinal(game) && !isGameUpcoming(game))
-	);
-}
-
-export function isGameFinal(game: { status: string; away_score?: number; home_score?: number }): boolean {
-	const statusLower = game.status.toLowerCase();
-
-	// Game is final if it has a final status or has scores indicating completion
-	return (
-		statusLower.includes('final') ||
-		statusLower.includes('completed') ||
-		statusLower.includes('game over') ||
-		(game.away_score !== undefined && game.home_score !== undefined && statusLower.includes('final'))
-	);
-}
-
-export function isGameUpcoming(game: { status: string; start_time?: string }): boolean {
-	const statusLower = game.status.toLowerCase();
-
-	// Game is upcoming if it's scheduled but hasn't started
-	return (
-		statusLower.includes('scheduled') ||
-		statusLower.includes('preview') ||
-		statusLower.includes('upcoming') ||
-		(statusLower.includes('pre') && !statusLower.includes('in progress'))
-	);
+	// Use codedGameState as primary source for more reliable status
+	// But also consider detailedState for disambiguation
+	switch (codedState) {
+		case 'I': // In Progress
+			return { status: 'live', displayText: 'LIVE' };
+		case 'F': // Final
+			return { status: 'final', displayText: 'FINAL' };
+		case 'S': // Scheduled
+			return { status: 'upcoming', displayText: 'UPCOMING' };
+		case 'D': // Delayed
+			return { status: 'upcoming', displayText: 'DELAYED' };
+		case 'P': // P can be Pre-Game or Postponed - use detailedState to disambiguate
+			if (detailedState.includes('pre-game') || detailedState.includes('pre game')) {
+				return { status: 'upcoming', displayText: 'UPCOMING' };
+			} else if (detailedState.includes('postponed')) {
+				return { status: 'postponed', displayText: 'POSTPONED' };
+			} else {
+				// Default to upcoming for P status
+				return { status: 'upcoming', displayText: 'UPCOMING' };
+			}
+		case 'U': // Suspended
+			return { status: 'suspended', displayText: 'SUSPENDED' };
+		default:
+			// Fallback to detailedState if codedGameState is not available
+			if (detailedState.includes('in progress') || detailedState.includes('live')) {
+				return { status: 'live', displayText: 'LIVE' };
+			}
+			if (detailedState.includes('final') || detailedState.includes('completed')) {
+				return { status: 'final', displayText: 'FINAL' };
+			}
+			if (detailedState.includes('scheduled') || detailedState.includes('preview')) {
+				return { status: 'upcoming', displayText: 'UPCOMING' };
+			}
+			if (detailedState.includes('postponed')) {
+				return { status: 'postponed', displayText: 'POSTPONED' };
+			}
+			if (detailedState.includes('suspended')) {
+				return { status: 'suspended', displayText: 'SUSPENDED' };
+			}
+			return { status: 'unknown', displayText: 'UNKNOWN' };
+	}
 }
 
 export function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
