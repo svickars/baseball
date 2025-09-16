@@ -46,6 +46,12 @@ export interface GameData {
 		inning_list: any[];
 		is_postponed: boolean;
 		is_suspended: boolean;
+		away_score?: number;
+		home_score?: number;
+		total_away_runs?: number;
+		total_home_runs?: number;
+		status?: string;
+		detailed_data?: any;
 	};
 	svg_content: string;
 	success: boolean;

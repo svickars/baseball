@@ -1,4 +1,5 @@
 import { Game, GameData } from '@/types';
+import { BaseballServiceError, handleApiError, validateGameId, createFallbackGameData } from './error-handler';
 
 // MLB API base URL
 const MLB_API_BASE = 'https://statsapi.mlb.com/api/v1';
@@ -133,6 +134,10 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 	} catch (error) {
 		console.error(`Error fetching games for ${date}:`, error);
 
+		// Handle different types of errors appropriately
+		const apiError = handleApiError(error);
+		console.error('Error details:', apiError);
+
 		// Fallback to mock data if API fails
 		return [
 			{
@@ -171,66 +176,19 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 
 export async function getGameDetails(gameId: string): Promise<GameData> {
 	try {
-		// Try to use the Python JSON integration script first
+		// Validate game ID format
+		validateGameId(gameId);
 
-		// Import the Python integration function
-		const { exec } = require('child_process');
-		const util = require('util');
-		const execAsync = util.promisify(exec);
-
-		try {
-			// Call the Python script to get detailed game data
-			const { stdout, stderr } = await execAsync(`python3 lib/baseball_json_integration.py ${gameId}`);
-
-			if (stderr) {
-				// Python script stderr output
-			}
-
-			// Parse the JSON output from Python
-			const gameData = JSON.parse(stdout);
-
-			if (gameData && gameData.integration_status === 'real_baseball_library_data') {
-				// Convert the Python data format to our expected format
-				const convertedGameData = {
-					away_team: {
-						name: gameData.away_team,
-						abbreviation: gameData.away_code,
-					},
-					home_team: {
-						name: gameData.home_team,
-						abbreviation: gameData.home_code,
-					},
-					game_date_str: gameData.game_date_str,
-					location: gameData.location,
-					inning_list: gameData.inning_list || [],
-					is_postponed: false,
-					is_suspended: false,
-					// Add the detailed data from Python
-					detailed_data: gameData,
-				};
-
-				// Generate SVG from the detailed data
-				const svgContent = generateDetailedSVGFromPythonData(gameData);
-
-				return {
-					game_id: gameId,
-					game_data: convertedGameData,
-					svg_content: svgContent,
-					success: true,
-				};
-			}
-		} catch (pythonError) {
-			// Python integration failed, falling back to MLB API
-		}
+		// Note: Python integration removed for browser compatibility
+		// The child_process module cannot be used in browser/Next.js client-side code
+		// Python integration would need to be moved to a server-side API endpoint
+		// For now, we'll proceed directly to the MLB API fallback
 
 		// Fallback to original MLB API logic
 
 		// Parse game ID to extract gamePk
 		// Format: YYYY-MM-DD-AWAY-HOME-GAME_NUMBER
 		const parts = gameId.split('-');
-		if (parts.length < 6) {
-			throw new Error('Invalid game ID format');
-		}
 
 		const date = `${parts[0]}-${parts[1]}-${parts[2]}`;
 		const awayCode = parts[3];
@@ -387,29 +345,19 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 		};
 	} catch (error) {
 		console.error(`Error fetching game details for ${gameId}:`, error);
-		console.error('Error details:', error instanceof Error ? error.message : String(error));
+
+		// Handle different types of errors appropriately
+		const apiError = handleApiError(error);
+		console.error('Error details:', apiError);
 
 		// Fallback to mock data if API fails
-		const parts = gameId.split('-');
-		const dateStr = parts.slice(0, 3).join('-');
-		const awayCode = parts[3];
-		const homeCode = parts[4];
+		const mockGameData = createFallbackGameData(gameId);
 
-		const mockGameData = {
-			away_team: {
-				name: `${awayCode} Team`,
-				abbreviation: awayCode,
-			},
-			home_team: {
-				name: `${homeCode} Team`,
-				abbreviation: homeCode,
-			},
-			game_date_str: dateStr,
-			location: 'Stadium Name, City, State',
-			inning_list: Array.from({ length: 9 }, (_, i) => ({ inning: i + 1 })),
-			is_postponed: false,
-			is_suspended: false,
-		};
+		// Extract team codes for SVG generation
+		const parts = gameId.split('-');
+		const awayCode = parts[3] || 'AWY';
+		const homeCode = parts[4] || 'HOM';
+		const dateStr = parts.slice(0, 3).join('-');
 
 		const mockSvgContent = `
       <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
