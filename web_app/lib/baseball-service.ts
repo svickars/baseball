@@ -570,16 +570,52 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 				let awayErrors = 0;
 				let homeErrors = 0;
 
-				// Skip detailed game feed calls for initial load to improve performance
-				// Detailed data will be fetched when user selects a specific game
-				// This reduces initial load time from 2+ seconds to under 500ms
+				// Try to get detailed inning data from game feed API
+				// This is needed because the schedule API doesn't include linescore data
+				try {
+					const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
 
-				// Use basic data from schedule for initial load
-				innings = [];
-				awayHits = 0;
-				homeHits = 0;
-				awayErrors = 0;
-				homeErrors = 0;
+					const gameFeedData = await makeCachedRequest(
+						gameFeedCache,
+						gameFeedCacheKey,
+						async () => {
+							const gameFeedResponse = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`, {
+								headers: {
+									'User-Agent': 'Mozilla/5.0 (compatible; BaseballApp/1.0)',
+								},
+							});
+
+							if (!gameFeedResponse.ok) {
+								throw new Error(`Game feed not available for game ${gamePk}`);
+							}
+
+							return gameFeedResponse.json();
+						},
+						30 * 1000 // 30 seconds TTL for live game feeds
+					);
+
+					// Extract inning data from game feed
+					const linescore = gameFeedData.liveData?.linescore;
+					if (linescore && linescore.innings) {
+						innings = linescore.innings.map((inning: any) => ({
+							inning: inning.num,
+							away_runs: inning.away?.runs || 0,
+							home_runs: inning.home?.runs || 0,
+						}));
+
+						// Get hits and errors from linescore
+						if (linescore.teams) {
+							awayHits = linescore.teams.away?.hits || 0;
+							homeHits = linescore.teams.home?.hits || 0;
+							awayErrors = linescore.teams.away?.errors || 0;
+							homeErrors = linescore.teams.home?.errors || 0;
+						}
+					}
+				} catch (feedError) {
+					// Game feed not available (likely scheduled game that hasn't started)
+					// This is normal for scheduled games
+					innings = [];
+				}
 
 				const game: Game = {
 					id: `${date}-${awayCode}-${homeCode}-${gameData.gameNumber || 1}`,

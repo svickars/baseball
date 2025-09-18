@@ -259,6 +259,7 @@ export function useBaseballApp() {
 	// Load games on mount with current date
 	useEffect(() => {
 		const today = getTodayLocalDate();
+		console.log('Loading games for date:', today, 'Current date object:', new Date());
 		loadGames(today);
 	}, [loadGames]);
 

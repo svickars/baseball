@@ -7,6 +7,8 @@ import { Clock, MapPin, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import * as TeamLogos from './team-logos';
 import LoadingSpinner from './LoadingSpinner';
+// import { useProgressiveGameData } from '@/hooks/useProgressiveGameData';
+// import ProgressiveLoadingIndicator, { InningDataSkeleton, TeamStatsSkeleton } from './ProgressiveLoadingIndicator';
 
 interface GamesListProps {
 	games: Game[];
@@ -143,6 +145,7 @@ const formatStadiumLocation = (location: string) => {
 // Helper function to get detailed game data from the game object
 const getDetailedGameData = (game: Game) => {
 	// The game object should already have all the necessary data
+	// For progressive loading, the data is directly on the game object
 	return {
 		innings: game.innings || [],
 		away_hits: game.away_hits || 0,
@@ -152,10 +155,56 @@ const getDetailedGameData = (game: Game) => {
 	};
 };
 
+// Helper function to render inning score with loading state
+const renderInningScore = (inning: number, game: GameWithDetails, isAway: boolean, loadingState: string) => {
+	const { score, className } = getInningScoreWithStyle(inning, game, isAway);
+
+	if (loadingState === 'loading-details') {
+		return <div className="w-6 h-6 bg-gray-200 rounded animate-pulse" />;
+	}
+
+	return (
+		<div
+			className={`bg-primary-50 font-mono dark:bg-primary-900 border-r border-primary-200 dark:border-primary-700 h-6 flex items-center justify-center ${getInningClass(
+				inning,
+				game
+			)} ${className}`}>
+			{score}
+		</div>
+	);
+};
+
+// Helper function to render team stats with loading state
+const renderTeamStats = (game: GameWithDetails, isAway: boolean, loadingState: string) => {
+	// Use the data directly from the game object (progressive loader updates this)
+	const hits = isAway ? game.away_hits || 0 : game.home_hits || 0;
+	const errors = isAway ? game.away_errors || 0 : game.home_errors || 0;
+
+	if (loadingState === 'loading-details') {
+		return (
+			<>
+				<div className="w-8 h-6 bg-gray-200 rounded animate-pulse" />
+				<div className="w-8 h-6 bg-gray-200 rounded animate-pulse" />
+			</>
+		);
+	}
+
+	return (
+		<>
+			<div className="flex justify-center items-center h-6 font-mono border-r bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-600">
+				{hits}
+			</div>
+			<div className="flex justify-center items-center h-6 font-mono bg-primary-50 dark:bg-primary-900">{errors}</div>
+		</>
+	);
+};
+
 // Helper function to get inning score display
 const getInningScore = (inning: number, game: GameWithDetails, isAway: boolean) => {
-	// Use detailed data if available, otherwise fall back to basic game data
-	const innings = game.detailedData?.innings || game.innings || [];
+	// Use the innings data directly from the game object (progressive loader updates this)
+	const innings = game.innings || [];
+
+	// Debug logging removed - issue identified
 
 	if (innings && innings.length > 0) {
 		const inningData = innings.find((i) => i.inning === inning);
@@ -164,8 +213,10 @@ const getInningScore = (inning: number, game: GameWithDetails, isAway: boolean) 
 			// No data for this inning
 			if (game.status === 'Final') {
 				return 'X'; // Show 'X' for unplayed innings in final games
+			} else if (game.status === 'Scheduled' || game.status === 'Pre-Game') {
+				return '-'; // Show '-' for scheduled games that haven't started
 			}
-			return ''; // Show nothing for future innings in live/upcoming games
+			return ''; // Show nothing for future innings in live games
 		}
 
 		// Get the appropriate score based on team (away = top half, home = bottom half)
@@ -289,6 +340,9 @@ const getGridColsClass = (totalColumns: number) => {
 };
 
 const GamesList = memo(function GamesList({ games, selectedDate, onGameSelect }: GamesListProps) {
+	// For now, use the games directly since baseball-service already loads real data
+	// TODO: Re-enable progressive loading if we need additional detailed data later
+
 	// Memoize the processed games data to prevent unnecessary recalculations
 	const processedGames = useMemo(() => {
 		return games.map((game) => {
@@ -434,27 +488,12 @@ const GamesList = memo(function GamesList({ games, selectedDate, onGameSelect }:
 												{game.away_code}
 											</div>
 											{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => {
-												const { score, className } = getInningScoreWithStyle(inning, game, true);
-												return (
-													<div
-														key={inning}
-														className={`bg-primary-50 font-mono dark:bg-primary-900 border-r border-primary-200 dark:border-primary-700 h-6 flex items-center justify-center ${getInningClass(
-															inning,
-															game
-														)} ${className}`}>
-														{score}
-													</div>
-												);
+												return <div key={inning}>{renderInningScore(inning, game, true, 'detailed')}</div>;
 											})}
 											<div className="flex justify-center items-center h-6 font-mono font-bold border-r border-l bg-primary-50 dark:bg-primary-900 border-r-primary-200 border-l-primary-300 dark:border-primary-600">
 												{game.away_score || 0}
 											</div>
-											<div className="flex justify-center items-center h-6 font-mono border-r bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-600">
-												{game.detailedData?.away_hits || game.away_hits || '-'}
-											</div>
-											<div className="flex justify-center items-center h-6 font-mono bg-primary-50 dark:bg-primary-900">
-												{game.detailedData?.away_errors || game.away_errors || '-'}
-											</div>
+											{renderTeamStats(game, true, 'detailed')}
 										</div>
 									);
 								})()}
@@ -473,27 +512,12 @@ const GamesList = memo(function GamesList({ games, selectedDate, onGameSelect }:
 												{game.home_code}
 											</div>
 											{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => {
-												const { score, className } = getInningScoreWithStyle(inning, game, false);
-												return (
-													<div
-														key={inning}
-														className={`bg-primary-50 font-mono dark:bg-primary-900 border-r border-primary-200 dark:border-primary-700 h-6 flex items-center justify-center ${getInningClass(
-															inning,
-															game
-														)} ${className}`}>
-														{score}
-													</div>
-												);
+												return <div key={inning}>{renderInningScore(inning, game, false, 'detailed')}</div>;
 											})}
 											<div className="flex justify-center items-center h-6 font-mono font-bold border-r border-l bg-primary-50 dark:bg-primary-900 border-r-primary-200 border-l-primary-300 dark:border-primary-600">
 												{game.home_score || 0}
 											</div>
-											<div className="flex justify-center items-center h-6 font-mono border-r bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-600">
-												{game.detailedData?.home_hits || game.home_hits || '-'}
-											</div>
-											<div className="flex justify-center items-center h-6 font-mono bg-primary-50 dark:bg-primary-900">
-												{game.detailedData?.home_errors || game.home_errors || '-'}
-											</div>
+											{renderTeamStats(game, false, 'detailed')}
 										</div>
 									);
 								})()}
