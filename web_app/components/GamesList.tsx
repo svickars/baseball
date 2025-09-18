@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Game } from '@/types';
 import { formatDate, formatTime, getStatusColor, getGameStatusFromMLB } from '@/lib/utils';
 import { Clock, MapPin, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import * as TeamLogos from './team-logos';
-import { getGameDetails } from '@/lib/baseball-service';
 import LoadingSpinner from './LoadingSpinner';
 
 interface GamesListProps {
@@ -141,73 +140,16 @@ const formatStadiumLocation = (location: string) => {
 	return location;
 };
 
-// Helper function to fetch detailed game data
-const fetchDetailedGameData = async (gameId: string) => {
-	try {
-		const response = await fetch(`/api/game/${gameId}`);
-		if (response.ok) {
-			const data = await response.json();
-			if (data.success && data.game_data) {
-				// Extract inning data from the detailed game data
-				const innings = data.game_data.detailed_data?.innings || [];
-
-				// Extract hits and errors from the detailed game events
-				let away_hits = 0;
-				let home_hits = 0;
-				let away_errors = 0;
-				let home_errors = 0;
-
-				if (innings && innings.length > 0) {
-					innings.forEach((inning: any) => {
-						// Count hits for away team (top events)
-						inning.top_events?.forEach((event: any) => {
-							if (
-								event.got_on_base &&
-								event.summary &&
-								!event.summary.includes('Walk') &&
-								!event.summary.includes('Hit By Pitch') &&
-								!event.summary.includes('Error')
-							) {
-								away_hits++;
-							}
-							// Count errors for home team (away team benefits from home team errors)
-							if (event.error_str) {
-								home_errors++;
-							}
-						});
-
-						// Count hits for home team (bottom events)
-						inning.bottom_events?.forEach((event: any) => {
-							if (
-								event.got_on_base &&
-								event.summary &&
-								!event.summary.includes('Walk') &&
-								!event.summary.includes('Hit By Pitch') &&
-								!event.summary.includes('Error')
-							) {
-								home_hits++;
-							}
-							// Count errors for away team (home team benefits from away team errors)
-							if (event.error_str) {
-								away_errors++;
-							}
-						});
-					});
-				}
-
-				return {
-					innings,
-					away_hits,
-					home_hits,
-					away_errors,
-					home_errors,
-				};
-			}
-		}
-	} catch (error) {
-		console.error(`Error fetching detailed data for game ${gameId}:`, error);
-	}
-	return null;
+// Helper function to get detailed game data from the game object
+const getDetailedGameData = (game: Game) => {
+	// The game object should already have all the necessary data
+	return {
+		innings: game.innings || [],
+		away_hits: game.away_hits || 0,
+		home_hits: game.home_hits || 0,
+		away_errors: game.away_errors || 0,
+		home_errors: game.home_errors || 0,
+	};
 };
 
 // Helper function to get inning score display
@@ -216,68 +158,66 @@ const getInningScore = (inning: number, game: GameWithDetails, isAway: boolean) 
 	const innings = game.detailedData?.innings || game.innings || [];
 
 	if (innings && innings.length > 0) {
-		// For final games, check special cases first before returning inning data
-		if (game.status === 'Final') {
-			const lastInning = Math.max(...innings.map((i) => i.inning));
+		const inningData = innings.find((i) => i.inning === inning);
 
-			// Show 'X' for unplayed innings after the last played inning
-			if (inning > lastInning) {
-				return 'X';
+		if (!inningData) {
+			// No data for this inning
+			if (game.status === 'Final') {
+				return 'X'; // Show 'X' for unplayed innings in final games
 			}
+			return ''; // Show nothing for future innings in live/upcoming games
+		}
 
+		// Get the appropriate score based on team (away = top half, home = bottom half)
+		const score = isAway ? inningData.away_runs : inningData.home_runs;
+
+		// Handle special cases for final games
+		if (game.status === 'Final') {
 			// Special case: bottom of 9th when home team is winning (game ended in top of 9th)
 			if (inning === 9 && !isAway && game.home_score && game.away_score && game.home_score > game.away_score) {
-				// Check if the 9th inning data exists but only has away team data (top of inning)
-				const ninthInningData = innings.find((i) => i.inning === 9);
-				if (ninthInningData && ninthInningData.away_runs !== undefined && ninthInningData.home_runs === undefined) {
+				// Check if home team was already winning after 8 innings
+				let homeRunsThrough8 = 0;
+				let awayRunsThrough8 = 0;
+
+				for (let i = 1; i <= 8; i++) {
+					const prevInningData = innings.find((inn) => inn.inning === i);
+					if (prevInningData) {
+						homeRunsThrough8 += prevInningData.home_runs || 0;
+						awayRunsThrough8 += prevInningData.away_runs || 0;
+					}
+				}
+
+				// If home team was already winning after 8 innings, bottom of 9th wasn't played
+				if (homeRunsThrough8 > awayRunsThrough8) {
 					return 'X';
 				}
+			}
 
-				// Alternative check: if home team was already winning after 8 innings,
-				// the bottom of 9th wasn't played (game ended in top of 9th)
-				if (ninthInningData && lastInning === 9) {
-					// Calculate total runs through 8 innings to see if home team was already winning
-					let homeRunsThrough8 = 0;
-					let awayRunsThrough8 = 0;
+			// For regular innings, return the actual score
+			return score || 0;
+		}
 
-					for (let i = 1; i <= 8; i++) {
-						const inningData = innings.find((inn) => inn.inning === i);
-						if (inningData) {
-							homeRunsThrough8 += inningData.home_runs || 0;
-							awayRunsThrough8 += inningData.away_runs || 0;
-						}
-					}
-
-					// If home team was already winning after 8 innings, bottom of 9th wasn't played
-					if (homeRunsThrough8 > awayRunsThrough8) {
-						return 'X';
-					}
-				}
+		// For live games, show current inning or future innings
+		if (game.status === 'Live' || game.is_live) {
+			const currentInning = parseInt(game.inning || '1');
+			if (inning < currentInning) {
+				// Past innings - show actual score
+				return score || 0;
+			} else if (inning === currentInning) {
+				// Current inning - show current score or 0 if no runs yet
+				return score || 0;
+			} else {
+				// Future innings - show nothing
+				return '';
 			}
 		}
 
-		// Use real inning data (after checking special cases)
-		const inningData = innings.find((i) => i.inning === inning);
-		if (inningData) {
-			return isAway ? inningData.away_runs : inningData.home_runs;
-		}
+		// For upcoming games, show nothing
+		return '';
 	}
 
-	// For live games without full inning data, show current inning
-	if (game.status === 'Live' || game.is_live) {
-		const currentInning = parseInt(game.inning || '1');
-		if (inning === currentInning) {
-			return '0'; // Current inning score
-		} else if (inning < currentInning) {
-			// Try to get from inning data, fallback to 0
-			const inningData = innings?.find((i) => i.inning === inning);
-			return inningData ? (isAway ? inningData.away_runs : inningData.home_runs) : '0';
-		} else {
-			return '-'; // Future innings
-		}
-	}
-
-	return '-'; // Default for upcoming games or no data
+	// No inning data available
+	return '';
 };
 
 // Helper function to get current inning class for live games
@@ -304,7 +244,7 @@ const getInningScoreWithStyle = (inning: number, game: GameWithDetails, isAway: 
 	}
 
 	// Apply lighter text color for 0 scores (except live innings)
-	if (score === 0 || score === '0') {
+	if (String(score) === '0') {
 		return { score, className: 'text-primary-500' };
 	}
 
@@ -348,38 +288,17 @@ const getGridColsClass = (totalColumns: number) => {
 	return gridClasses[totalColumns] || 'grid-cols-13';
 };
 
-export default function GamesList({ games, selectedDate, onGameSelect }: GamesListProps) {
-	const [gamesWithDetails, setGamesWithDetails] = useState<GameWithDetails[]>([]);
-	const [loadingDetails, setLoadingDetails] = useState<boolean>(true);
-
-	useEffect(() => {
-		const fetchAllDetailedData = async () => {
-			setLoadingDetails(true);
-			const gamesWithDetailsData = await Promise.all(
-				games.map(async (game) => {
-					const detailedData = await fetchDetailedGameData(game.id);
-					return {
-						...game,
-						detailedData,
-					} as GameWithDetails;
-				})
-			);
-			setGamesWithDetails(gamesWithDetailsData);
-			setLoadingDetails(false);
-		};
-
-		if (games && games.length > 0) {
-			fetchAllDetailedData();
-		}
+const GamesList = memo(function GamesList({ games, selectedDate, onGameSelect }: GamesListProps) {
+	// Memoize the processed games data to prevent unnecessary recalculations
+	const processedGames = useMemo(() => {
+		return games.map((game) => {
+			const detailedData = getDetailedGameData(game);
+			return {
+				...game,
+				detailedData,
+			} as GameWithDetails;
+		});
 	}, [games]);
-
-	if (loadingDetails) {
-		return (
-			<section className="my-8">
-				<LoadingSpinner message="Loading games..." />
-			</section>
-		);
-	}
 
 	if (games.length === 0) {
 		return (
@@ -397,25 +316,7 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 	return (
 		<section className="flex flex-col flex-1">
 			<div className="grid flex-1 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-				{gamesWithDetails.map((game: GameWithDetails) => {
-					// Console log all game data for debugging
-					console.log('🎮 GamesList - Game Data:', {
-						id: game.id,
-						away_team: game.away_team,
-						home_team: game.home_team,
-						away_code: game.away_code,
-						home_code: game.home_code,
-						away_score: game.away_score,
-						home_score: game.home_score,
-						status: game.status,
-						mlbStatus: game.mlbStatus,
-						game_pk: game.game_pk,
-						is_live: game.is_live,
-						inning: game.inning,
-						inning_state: game.inning_state,
-						detailedData: game.detailedData,
-					});
-
+				{processedGames.map((game: GameWithDetails) => {
 					// Use MLB API status data for more reliable status determination
 					// Use MLB API status as the primary and only source of truth
 					const gameStatus = game.mlbStatus
@@ -439,20 +340,20 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 							key={game.id}
 							href={`/game/${game.id}`}
 							className={`game-card ${statusClassModifier ? statusClassModifier : 'block'}`}>
-							<div className="flex justify-between items-start mb-3">
+							<div className="flex justify-between items-start -mx-3 mb-3">
 								<h3 className="flex items-center w-full text-lg font-semibold text-secondary-900 dark:text-secondary-100">
 									{/* Away Team */}
-									<div className="flex flex-1 gap-2 justify-start items-center">
+									<div className="flex flex-1 gap-1 justify-start items-center">
 										{getTeamLogo(game.away_code)}
 										<span className="translate-y-0.5">{getTeamName(game.away_team)}</span>
 									</div>
 									{/* @ Symbol */}
-									<div className="flex flex-shrink justify-center px-4">
+									<div className="flex flex-shrink justify-center px-1">
 										<span className="translate-y-0.5">@</span>
 									</div>
 									{/* Home Team */}
-									<div className="flex flex-1 gap-2 justify-end items-center">
-										<span className="translate-y-0.5">{getTeamName(game.home_team)}</span>
+									<div className="flex flex-1 gap-1 justify-end items-center">
+										<span className="translate-y-0.5 text-right">{getTeamName(game.home_team)}</span>
 										{getTeamLogo(game.home_code)}
 									</div>
 								</h3>
@@ -467,18 +368,18 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 
 							{/* Game Info Row */}
 							<div className="-mx-6">
-								<div className="flex text-xs">
+								<div className="flex w-full text-xs">
 									{/* Game Time */}
 									<div className="flex flex-shrink-0 gap-1 items-center px-2 h-6 border-r border-primary-200 dark:border-primary-700">
 										{/* <Clock className="w-3 h-3" /> */}
 										<span className="translate-y-0.5">{game.start_time}</span>
 									</div>
 									{/* Stadium */}
-									<div className="flex flex-grow items-center px-2 h-6">
+									<div className="flex flex-grow items-center px-2 h-6 truncate">
 										<span className="text-xs truncate">{formatStadiumLocation(game.location)}</span>
 									</div>
 									{/* Game Status */}
-									<div className="flex flex-shrink-0 justify-center items-center px-0 h-6">
+									<div className="flex flex-shrink-0 justify-center items-center px-0 h-6 truncate">
 										{statusDisplay && (
 											<span className={`h-full status-indicator ${statusClassModifier}`}>{statusDisplay}</span>
 										)}
@@ -498,7 +399,7 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 												totalColumns
 											)} border-primary-300 dark:border-primary-700`}>
 											{/* Header Row */}
-											<div className="h-6 border-r bg-primary-50 dark:bg-primary-800 border-primary-300 dark:border-primary-700"></div>
+											<div className="w-12 h-6 border-r bg-primary-50 dark:bg-primary-800 border-primary-300 dark:border-primary-700"></div>
 											{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => (
 												<div
 													key={inning}
@@ -529,7 +430,7 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 											className={`grid text-xs border-b ${getGridColsClass(
 												totalColumns
 											)} border-primary-200 dark:border-primary-700`}>
-											<div className="flex justify-end items-center px-1 h-6 font-semibold border-r bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+											<div className="flex justify-end items-center px-1 w-12 h-6 font-semibold border-r bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 												{game.away_code}
 											</div>
 											{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => {
@@ -568,7 +469,7 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 											className={`grid text-xs border-b ${getGridColsClass(
 												totalColumns
 											)} border-primary-200 dark:border-primary-700`}>
-											<div className="flex justify-end items-center px-1 h-6 font-semibold border-r bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+											<div className="flex justify-end items-center px-1 w-12 h-6 font-semibold border-r bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 												{game.home_code}
 											</div>
 											{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => {
@@ -603,4 +504,6 @@ export default function GamesList({ games, selectedDate, onGameSelect }: GamesLi
 			</div>
 		</section>
 	);
-}
+});
+
+export default GamesList;

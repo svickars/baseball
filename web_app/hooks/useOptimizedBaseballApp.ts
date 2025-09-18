@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Game, GameData, GameControls } from '@/types';
-import { baseballApi } from '@/lib/api';
+import { optimizedApi } from '@/lib/optimized-api';
+import { dataPrefetcher } from '@/lib/data-prefetcher';
+import { dataNormalizer, NormalizedGame } from '@/lib/data-normalizer';
 import { getGameStatusFromMLB, getTodayLocalDate } from '@/lib/utils';
-import { perf, performanceDiagnostic } from '@/lib/performance-diagnostic';
 
-export function useBaseballApp() {
+export function useOptimizedBaseballApp() {
 	const [games, setGames] = useState<Game[]>([]);
 	const [selectedGame, setSelectedGame] = useState<GameData | null>(null);
 	const [selectedDate, setSelectedDate] = useState<string>(() => getTodayLocalDate());
@@ -31,34 +32,64 @@ export function useBaseballApp() {
 	const liveDataIntervalRef = useRef<NodeJS.Timeout | null>(null);
 	const delayCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-	// Load games for a specific date
+	// Prefetch timer ref
+	const prefetchTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+	// Memoized normalized games for performance
+	const normalizedGames = useMemo(() => {
+		return games.map((game) => {
+			// Try to get normalized version from cache
+			const normalized = dataNormalizer.getCachedGame(game.id);
+			if (normalized) {
+				return normalized;
+			}
+
+			// Create a basic normalized version for games list
+			return {
+				id: game.id,
+				date: game.game_date_str,
+				awayTeam: {
+					id: game.away_team.toLowerCase().replace(/\s+/g, '-'),
+					name: game.away_team,
+					abbreviation: game.away_team_abbreviation,
+					score: game.away_score,
+					hits: game.away_hits || 0,
+					errors: game.away_errors || 0,
+				},
+				homeTeam: {
+					id: game.home_team.toLowerCase().replace(/\s+/g, '-'),
+					name: game.home_team,
+					abbreviation: game.home_team_abbreviation,
+					score: game.home_score,
+					hits: game.home_hits || 0,
+					errors: game.home_errors || 0,
+				},
+				status: game.status,
+				venue: game.venue || 'Unknown',
+				innings: game.inning_list || [],
+				batters: { away: [], home: [] },
+				pitchers: { away: [], home: [] },
+				metadata: {
+					lastUpdated: Date.now(),
+					isLive: game.status?.toLowerCase().includes('live'),
+					gameType: 'regular' as const,
+				},
+			} as NormalizedGame;
+		});
+	}, [games]);
+
+	// Load games for a specific date with prefetching
 	const loadGames = useCallback(async (date: string) => {
-		perf.start('loadGames');
 		setIsLoading(true);
 		setError(null);
 
 		try {
-			perf.start('getGamesForDate');
-			const response = await baseballApi.getGamesForDate(date);
-			perf.end('getGamesForDate');
-
+			const response = await optimizedApi.getGamesForDate(date);
 			if (response.success) {
-				perf.start('processGamesData');
-				console.log('API Response:', response);
-				console.log('Games count:', response.games?.length);
-				perf.start('setGames');
 				setGames(response.games);
-				perf.end('setGames');
-
-				perf.start('setSelectedDate');
 				setSelectedDate(date);
-				perf.end('setSelectedDate');
-
-				perf.start('setView');
 				setView('games');
-				perf.end('setView');
 
-				perf.start('processLiveGames');
 				// Track live games using MLB API status
 				const liveGameIds = new Set(
 					response.games
@@ -72,17 +103,16 @@ export function useBaseballApp() {
 						.map((game) => game.id)
 				);
 				setLiveGames(liveGameIds);
-				perf.end('processLiveGames');
 
-				perf.start('autoRefreshLogic');
+				// Prefetch game details for better UX
+				prefetchGameDetails(response.games);
+
 				// Start auto-refresh if there are live games
 				if (liveGameIds.size > 0) {
 					startAutoRefresh();
 				} else {
 					stopAutoRefresh();
 				}
-				perf.end('autoRefreshLogic');
-				perf.end('processGamesData');
 			} else {
 				throw new Error('Failed to load games');
 			}
@@ -91,24 +121,47 @@ export function useBaseballApp() {
 			setError(errorMessage);
 		} finally {
 			setIsLoading(false);
-			perf.end('loadGames');
 		}
 	}, []);
 
-	// Load a specific game
+	// Prefetch game details for better performance
+	const prefetchGameDetails = useCallback((games: Game[]) => {
+		// Clear existing prefetch timer
+		if (prefetchTimerRef.current) {
+			clearTimeout(prefetchTimerRef.current);
+		}
+
+		// Prefetch after a short delay to not block initial render
+		prefetchTimerRef.current = setTimeout(() => {
+			dataPrefetcher.prefetchGames(games);
+		}, 1000);
+	}, []);
+
+	// Load a specific game with caching
 	const loadGame = useCallback(async (gameId: string) => {
 		setIsLoading(true);
 		setError(null);
 
 		try {
-			const response = await baseballApi.getGameDetails(gameId);
-			if (response.success) {
-				setSelectedGame(response);
-				setView('scorecard');
-				startLiveDataCollection(gameId);
-			} else {
-				throw new Error('Failed to load game');
+			// Try to get from prefetcher cache first
+			let gameData = dataPrefetcher.getCachedGameData(gameId);
+
+			if (!gameData) {
+				// Fallback to API call
+				const response = await optimizedApi.getGameDetails(gameId);
+				if (response.success) {
+					gameData = response;
+				} else {
+					throw new Error('Failed to load game');
+				}
 			}
+
+			// Normalize the data
+			const normalizedData = dataNormalizer.normalizeGame(gameData);
+
+			setSelectedGame(gameData);
+			setView('scorecard');
+			startLiveDataCollection(gameId);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to load game';
 			setError(errorMessage);
@@ -120,6 +173,9 @@ export function useBaseballApp() {
 	// Refresh current game
 	const refreshCurrentGame = useCallback(async () => {
 		if (selectedGame) {
+			// Clear cache for this game to force refresh
+			dataPrefetcher.clearGameCache(selectedGame.game_id);
+			dataNormalizer.clearCache();
 			await loadGame(selectedGame.game_id);
 		}
 	}, [selectedGame, loadGame]);
@@ -131,7 +187,7 @@ export function useBaseballApp() {
 		stopLiveDataCollection();
 	}, []);
 
-	// Auto-refresh for live games
+	// Auto-refresh for live games with optimized polling
 	const startAutoRefresh = useCallback(() => {
 		if (refreshIntervalRef.current) {
 			clearInterval(refreshIntervalRef.current);
@@ -140,7 +196,7 @@ export function useBaseballApp() {
 		refreshIntervalRef.current = setInterval(async () => {
 			if (selectedDate) {
 				try {
-					const response = await baseballApi.getGamesForDate(selectedDate);
+					const response = await optimizedApi.getGamesForDate(selectedDate);
 					if (response.success) {
 						setGames(response.games);
 
@@ -158,6 +214,9 @@ export function useBaseballApp() {
 						);
 						setLiveGames(liveGameIds);
 
+						// Prefetch updated game details
+						prefetchGameDetails(response.games);
+
 						// Stop auto-refresh if no more live games
 						if (liveGameIds.size === 0) {
 							stopAutoRefresh();
@@ -168,7 +227,7 @@ export function useBaseballApp() {
 				}
 			}
 		}, 30000); // Refresh every 30 seconds
-	}, [selectedDate]);
+	}, [selectedDate, prefetchGameDetails]);
 
 	const stopAutoRefresh = useCallback(() => {
 		if (refreshIntervalRef.current) {
@@ -177,7 +236,7 @@ export function useBaseballApp() {
 		}
 	}, []);
 
-	// Live data collection for current game
+	// Live data collection for current game with optimized caching
 	const startLiveDataCollection = useCallback(
 		(gameId: string) => {
 			// Clear existing intervals
@@ -191,8 +250,17 @@ export function useBaseballApp() {
 			// Fetch live data every 10 seconds
 			liveDataIntervalRef.current = setInterval(async () => {
 				try {
-					const response = await baseballApi.getGameDetails(gameId);
-					if (response.success) {
+					// Try to get from prefetcher cache first
+					let response = dataPrefetcher.getCachedGameData(gameId);
+
+					if (!response) {
+						const apiResponse = await optimizedApi.getGameDetails(gameId);
+						if (apiResponse.success) {
+							response = apiResponse;
+						}
+					}
+
+					if (response) {
 						const timestamp = Date.now();
 						const delaySeconds = controls.timeDelay;
 
@@ -262,21 +330,14 @@ export function useBaseballApp() {
 		loadGames(today);
 	}, [loadGames]);
 
-	// Log performance summary after initial load
-	useEffect(() => {
-		if (games.length > 0) {
-			console.log('Games state updated:', games.length, 'games');
-			setTimeout(() => {
-				performanceDiagnostic.logSummary();
-			}, 1000);
-		}
-	}, [games.length]); // Include loadGames in dependencies
-
 	// Cleanup on unmount
 	useEffect(() => {
 		return () => {
 			stopAutoRefresh();
 			stopLiveDataCollection();
+			if (prefetchTimerRef.current) {
+				clearTimeout(prefetchTimerRef.current);
+			}
 		};
 	}, [stopAutoRefresh, stopLiveDataCollection]);
 
@@ -285,9 +346,19 @@ export function useBaseballApp() {
 		setControls((prev) => ({ ...prev, ...newControls }));
 	}, []);
 
+	// Get performance statistics
+	const getPerformanceStats = useCallback(() => {
+		return {
+			prefetcher: dataPrefetcher.getCacheStats(),
+			normalizer: dataNormalizer.getCacheStats(),
+			api: optimizedApi.getQueueStats(),
+		};
+	}, []);
+
 	return {
 		// State
 		games,
+		normalizedGames,
 		selectedGame,
 		selectedDate,
 		isLoading,
@@ -302,8 +373,10 @@ export function useBaseballApp() {
 		refreshCurrentGame,
 		goBackToGames,
 		updateControls,
+		prefetchGameDetails,
 
 		// Utilities
 		setError,
+		getPerformanceStats,
 	};
 }

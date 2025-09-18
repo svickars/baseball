@@ -1,13 +1,5 @@
 {
 	"buildCommand": "cd web_app && npm run build",
 	"outputDirectory": "web_app/.next",
-	"installCommand": "cd web_app && npm install && pip3 install requests python-dateutil pytz",
-	"env": {
-		"BASEBALL_LIB_PATH": "baseball"
-	},
-	"build": {
-		"env": {
-			"BASEBALL_LIB_PATH": "baseball"
-		}
-	}
+	"installCommand": "cd web_app && npm install"
 }

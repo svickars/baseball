@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { GameData, Game } from '@/types';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { GameData, Game, DetailedGameData } from '@/types';
 import TraditionalScorecard from './TraditionalScorecard';
 import GamePreview from './GamePreview';
 import LoadingSpinner from './LoadingSpinner';
@@ -131,68 +131,66 @@ const getInningScore = (inning: number, game: any, isAway: boolean) => {
 	const innings = game.detailedData?.innings || game.innings || [];
 
 	if (innings && innings.length > 0) {
-		// For final games, check special cases first before returning inning data
-		if (game.status === 'Final') {
-			const lastInning = Math.max(...innings.map((i: any) => i.inning));
+		const inningData = innings.find((i: any) => i.inning === inning);
 
-			// Show 'X' for unplayed innings after the last played inning
-			if (inning > lastInning) {
-				return 'X';
+		if (!inningData) {
+			// No data for this inning
+			if (game.status === 'Final') {
+				return 'X'; // Show 'X' for unplayed innings in final games
 			}
+			return ''; // Show nothing for future innings in live/upcoming games
+		}
 
+		// Get the appropriate score based on team (away = top half, home = bottom half)
+		const score = isAway ? inningData.away_runs : inningData.home_runs;
+
+		// Handle special cases for final games
+		if (game.status === 'Final') {
 			// Special case: bottom of 9th when home team is winning (game ended in top of 9th)
 			if (inning === 9 && !isAway && game.home_score && game.away_score && game.home_score > game.away_score) {
-				// Check if the 9th inning data exists but only has away team data (top of inning)
-				const ninthInningData = innings.find((i: any) => i.inning === 9);
-				if (ninthInningData && ninthInningData.away_runs !== undefined && ninthInningData.home_runs === undefined) {
+				// Check if home team was already winning after 8 innings
+				let homeRunsThrough8 = 0;
+				let awayRunsThrough8 = 0;
+
+				for (let i = 1; i <= 8; i++) {
+					const prevInningData = innings.find((inn: any) => inn.inning === i);
+					if (prevInningData) {
+						homeRunsThrough8 += prevInningData.home_runs || 0;
+						awayRunsThrough8 += prevInningData.away_runs || 0;
+					}
+				}
+
+				// If home team was already winning after 8 innings, bottom of 9th wasn't played
+				if (homeRunsThrough8 > awayRunsThrough8) {
 					return 'X';
 				}
+			}
 
-				// Alternative check: if home team was already winning after 8 innings,
-				// the bottom of 9th wasn't played (game ended in top of 9th)
-				if (ninthInningData && lastInning === 9) {
-					// Calculate total runs through 8 innings to see if home team was already winning
-					let homeRunsThrough8 = 0;
-					let awayRunsThrough8 = 0;
+			// For regular innings, return the actual score
+			return score || 0;
+		}
 
-					for (let i = 1; i <= 8; i++) {
-						const inningData = innings.find((inn: any) => inn.inning === i);
-						if (inningData) {
-							homeRunsThrough8 += inningData.home_runs || 0;
-							awayRunsThrough8 += inningData.away_runs || 0;
-						}
-					}
-
-					// If home team was already winning after 8 innings, bottom of 9th wasn't played
-					if (homeRunsThrough8 > awayRunsThrough8) {
-						return 'X';
-					}
-				}
+		// For live games, show current inning or future innings
+		if (game.status === 'Live' || game.is_live) {
+			const currentInning = parseInt(game.inning || '1');
+			if (inning < currentInning) {
+				// Past innings - show actual score
+				return score || 0;
+			} else if (inning === currentInning) {
+				// Current inning - show current score or 0 if no runs yet
+				return score || 0;
+			} else {
+				// Future innings - show nothing
+				return '';
 			}
 		}
 
-		// Use real inning data (after checking special cases)
-		const inningData = innings.find((i: any) => i.inning === inning);
-		if (inningData) {
-			return isAway ? inningData.away_runs : inningData.home_runs;
-		}
+		// For upcoming games, show nothing
+		return '';
 	}
 
-	// For live games without full inning data, show current inning
-	if (game.status === 'Live' || game.is_live) {
-		const currentInning = parseInt(game.inning || '1');
-		if (inning === currentInning) {
-			return '0'; // Current inning score
-		} else if (inning < currentInning) {
-			// Try to get from inning data, fallback to 0
-			const inningData = innings?.find((i: any) => i.inning === inning);
-			return inningData ? (isAway ? inningData.away_runs : inningData.home_runs) : '0';
-		} else {
-			return '-'; // Future innings
-		}
-	}
-
-	return '-'; // Default for upcoming games or no data
+	// No inning data available
+	return '';
 };
 
 // Helper function to get current inning class for live games
@@ -219,7 +217,7 @@ const getInningScoreWithStyle = (inning: number, game: any, isAway: boolean) => 
 	}
 
 	// Apply lighter text color for 0 scores (except live innings)
-	if (score === 0 || score === '0') {
+	if (String(score) === '0') {
 		return { score, className: 'text-primary-500' };
 	}
 
@@ -263,30 +261,131 @@ const getGridColsClass = (totalColumns: number) => {
 	return gridClasses[totalColumns] || 'grid-cols-13';
 };
 
-export default function GamePage({ gameData, gameId, originalGame }: GamePageProps) {
+const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: GamePageProps) {
 	const [detailedData, setDetailedData] = useState<any>(null);
 	const [loading, setLoading] = useState(false);
 	const [activeTab, setActiveTab] = useState<'preview' | 'traditional' | 'stats' | 'events'>('preview');
 	const [selectedInning, setSelectedInning] = useState<number | null>(null);
 
+	// Memoize the transformed data to prevent unnecessary recalculations
+	const transformedData = useMemo(() => {
+		if (!gameData) return null;
+
+		return {
+			game_id: gameData.game_id,
+			date: gameData.game_data.game_date_str,
+			away_team: gameData.game_data.away_team,
+			home_team: gameData.game_data.home_team,
+			venue: gameData.game_data.location,
+			status: gameData.game_data.status || 'Unknown',
+			innings: gameData.game_data.inning_list || [],
+			away_score: gameData.game_data.away_score || 0,
+			home_score: gameData.game_data.home_score || 0,
+			total_away_runs: gameData.game_data.total_away_runs || 0,
+			total_home_runs: gameData.game_data.total_home_runs || 0,
+			is_postponed: gameData.game_data.is_postponed || false,
+			is_suspended: gameData.game_data.is_suspended || false,
+			umpires: gameData.game_data.umpires || [],
+			managers: gameData.game_data.managers || { away: null, home: null },
+			start_time: gameData.game_data.start_time || null,
+			end_time: gameData.game_data.end_time || null,
+			weather: gameData.game_data.weather || null,
+			wind: gameData.game_data.wind || null,
+			uniforms: gameData.game_data.uniforms || { away: null, home: null },
+			batters: { away: [], home: [] },
+			pitchers: { away: [], home: [] },
+			events: [],
+		} as DetailedGameData;
+	}, [gameData]);
+
 	useEffect(() => {
 		fetchDetailedData();
 	}, [gameId]);
 
-	const fetchDetailedData = async () => {
+	const fetchDetailedData = useCallback(async () => {
 		setLoading(true);
 		try {
-			const response = await fetch(`/api/game/${gameId}/detailed`);
-			const data = await response.json();
-			setDetailedData(data);
+			// Use the memoized transformed data
+			if (!transformedData) {
+				setLoading(false);
+				return;
+			}
+
+			// Process the detailed data with memoized transformations
+			const processedData = {
+				...transformedData,
+				innings: transformedData.innings.map((inning: any) => ({
+					inning: inning.inning,
+					away_runs: inning.away || 0,
+					home_runs: inning.home || 0,
+				})),
+				batters: gameData.game_data.player_stats?.away?.batters
+					? {
+							away: gameData.game_data.player_stats.away.batters.map((batter: any) => ({
+								name: batter.name,
+								position: batter.position,
+								atBats: batter.at_bats,
+								hits: batter.hits,
+								runs: batter.runs,
+								rbis: batter.rbis,
+								average: batter.average,
+							})),
+							home: gameData.game_data.player_stats.home.batters.map((batter: any) => ({
+								name: batter.name,
+								position: batter.position,
+								atBats: batter.at_bats,
+								hits: batter.hits,
+								runs: batter.runs,
+								rbis: batter.rbis,
+								average: batter.average,
+							})),
+					  }
+					: { away: [], home: [] },
+				pitchers: gameData.game_data.player_stats?.away?.pitchers
+					? {
+							away: gameData.game_data.player_stats.away.pitchers.map((pitcher: any) => ({
+								name: pitcher.name,
+								position: 'P',
+								innings_pitched: pitcher.innings_pitched,
+								hits: pitcher.hits,
+								runs: pitcher.runs,
+								earned_runs: pitcher.earned_runs,
+								walks: pitcher.walks,
+								strikeouts: pitcher.strikeouts,
+							})),
+							home: gameData.game_data.player_stats.home.pitchers.map((pitcher: any) => ({
+								name: pitcher.name,
+								position: 'P',
+								innings_pitched: pitcher.innings_pitched,
+								hits: pitcher.hits,
+								runs: pitcher.runs,
+								earned_runs: pitcher.earned_runs,
+								walks: pitcher.walks,
+								strikeouts: pitcher.strikeouts,
+							})),
+					  }
+					: { away: [], home: [] },
+				events: [],
+			};
+			setDetailedData(processedData);
 		} catch (error) {
 			console.error('Error fetching detailed data:', error);
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [transformedData, gameData.game_data.player_stats]);
 
-	const renderInningScorecard = () => {
+	// Memoize tab change handler
+	const handleTabChange = useCallback((tab: 'preview' | 'traditional' | 'stats' | 'events') => {
+		setActiveTab(tab);
+	}, []);
+
+	// Memoize inning selection handler
+	const handleInningSelect = useCallback((inning: number | null) => {
+		setSelectedInning(inning);
+	}, []);
+
+	const renderInningScorecard = useCallback(() => {
 		// Use detailed data if available, otherwise fall back to gameData
 		const innings = detailedData?.innings || gameData.game_data.inning_list;
 		const awayTotal =
@@ -436,9 +535,15 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 				)}
 			</div>
 		);
-	};
+	}, [
+		detailedData,
+		gameData.game_data.inning_list,
+		gameData.game_data.away_team.abbreviation,
+		gameData.game_data.home_team.abbreviation,
+		selectedInning,
+	]);
 
-	const renderStats = () => {
+	const renderStats = useCallback(() => {
 		const awayBatters = detailedData?.batters?.away || [];
 		const homeBatters = detailedData?.batters?.home || [];
 		const awayPitchers = detailedData?.pitchers?.away || [];
@@ -649,9 +754,9 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 				</div>
 			</div>
 		);
-	};
+	}, [detailedData, gameData.game_data.away_team.name, gameData.game_data.home_team.name]);
 
-	const renderEvents = () => {
+	const renderEvents = useCallback(() => {
 		if (!detailedData?.innings) {
 			return (
 				<div className="p-6 bg-white rounded-lg shadow-lg dark:bg-primary-800">
@@ -764,10 +869,10 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 				</div>
 			</div>
 		);
-	};
+	}, [detailedData]);
 
 	return (
-		<div className="mx-auto max-w-7xl min-h-screen border-r border-l border-primary-300 dark:border-primary-700">
+		<div className="mx-auto max-w-7xl min-h-screen border-r border-l border-primary-400 dark:border-primary-700">
 			{/* Header */}
 			<div className="border-b border-primary-100 dark:border-primary-700">
 				<div className="flex justify-between items-center px-6 border-b border-primary-200 dark:border-primary-600">
@@ -805,7 +910,7 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 
 				{/* Game Info */}
 				<div>
-					<div className="flex flex-col flex-wrap items-start w-full text-sm border-b md:flex-row text-primary-600 dark:text-primary-400 border-primary-300 dark:border-primary-700">
+					<div className="flex flex-col flex-wrap items-start w-full text-sm border-b md:flex-row text-primary-600 dark:text-primary-400 border-primary-400 dark:border-primary-700">
 						<div className="flex">
 							{/* Time */}
 							<div className="flex items-center justify-center px-3 py-3 border-r border-primary-200 dark:border-primary-600 w-[113px]">
@@ -865,7 +970,7 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 
 				{/* Inning Score Grid */}
 				{originalGame && (
-					<div className="border-t border-b border-t-primary-200 border-b-primary-300 dark:border-t-primary-700 dark:border-b-primary-800">
+					<div className="border-b border-b-primary-400 dark:border-t-primary-700 dark:border-b-primary-800">
 						{(() => {
 							// Create a game object that matches the GamesList format
 							const game = {
@@ -894,10 +999,12 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 									style={{ display: 'grid', gridTemplateColumns: `113px repeat(${totalColumns - 1}, 1fr)` }}>
 									{/* Header Row */}
 									<div className="h-6 border-r bg-primary-50 dark:bg-primary-800 border-primary-300 dark:border-primary-700 md:h-10"></div>
-									{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => (
+									{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning, idx) => (
 										<div
 											key={inning}
-											className="flex justify-center items-center h-6 font-medium border-r bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-700 md:h-10">
+											className={`flex justify-center items-center h-6 font-medium bg-primary-50 dark:bg-primary-900 md:h-10 ${
+												idx !== inningsToShow - 1 ? 'border-r border-primary-200 dark:border-primary-700' : ''
+											}`}>
 											{inning}
 										</div>
 									))}
@@ -943,15 +1050,16 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 									<div className="flex justify-end items-center px-2 h-6 font-semibold border-r bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700 md:h-10 text-primary-900 dark:text-primary-100">
 										{originalGame.away_code}
 									</div>
-									{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => {
+									{Array.from({ length: inningsToShow }, (_, i) => {
+										const inning = i + 1;
 										const { score, className } = getInningScoreWithStyle(inning, game, true);
+										const isLast = i === inningsToShow - 1;
 										return (
 											<div
 												key={inning}
-												className={`bg-primary-50 font-mono dark:bg-primary-900 border-r border-primary-200 dark:border-primary-700 h-6 md:h-10 flex items-center justify-center ${getInningClass(
-													inning,
-													game
-												)} ${className}`}>
+												className={`bg-primary-50 font-mono dark:bg-primary-900 ${
+													isLast ? '' : 'border-r border-primary-200 dark:border-primary-700'
+												} h-6 md:h-10 flex items-center justify-center ${getInningClass(inning, game)} ${className}`}>
 												{score}
 											</div>
 										);
@@ -993,20 +1101,21 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 
 							return (
 								<div
-									className="text-xs border-b md:text-lg border-primary-200 dark:border-primary-700"
+									className="text-xs md:text-lg"
 									style={{ display: 'grid', gridTemplateColumns: `113px repeat(${totalColumns - 1}, 1fr)` }}>
 									<div className="flex justify-end items-center px-2 h-6 font-semibold border-r bg-primary-50 dark:bg-primary-900 border-primary-300 dark:border-primary-700 md:h-10 text-primary-900 dark:text-primary-100">
 										{originalGame.home_code}
 									</div>
-									{Array.from({ length: inningsToShow }, (_, i) => i + 1).map((inning) => {
+									{Array.from({ length: inningsToShow }, (_, i) => {
+										const inning = i + 1;
 										const { score, className } = getInningScoreWithStyle(inning, game, false);
+										const isLast = i === inningsToShow - 1;
 										return (
 											<div
 												key={inning}
-												className={`bg-primary-50 font-mono dark:bg-primary-900 border-r border-primary-200 dark:border-primary-700 h-6 md:h-10 flex items-center justify-center ${getInningClass(
-													inning,
-													game
-												)} ${className}`}>
+												className={`bg-primary-50 font-mono dark:bg-primary-900 ${
+													!isLast ? 'border-r border-primary-200 dark:border-primary-700' : ''
+												} h-6 md:h-10 flex items-center justify-center ${getInningClass(inning, game)} ${className}`}>
 												{score}
 											</div>
 										);
@@ -1039,7 +1148,7 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 						].map((tab: { id: string; label: string }, index) => (
 							<button
 								key={tab.id}
-								onClick={() => setActiveTab(tab.id as any)}
+								onClick={() => handleTabChange(tab.id as any)}
 								className={`py-2 px-4 border-b-2 font-medium text-sm ${
 									activeTab === tab.id
 										? 'border-accent-500 text-accent-600 dark:text-accent-400'
@@ -1073,4 +1182,6 @@ export default function GamePage({ gameData, gameId, originalGame }: GamePagePro
 			</div>
 		</div>
 	);
-}
+});
+
+export default GamePage;

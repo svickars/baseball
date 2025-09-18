@@ -51,6 +51,69 @@ export interface GameData {
 		total_away_runs?: number;
 		total_home_runs?: number;
 		status?: string;
+		// Supplementary data from MLB API
+		umpires?: Array<{
+			name: string;
+			position: string;
+		}>;
+		managers?: {
+			away: string | null;
+			home: string | null;
+		};
+		start_time?: string | null;
+		end_time?: string | null;
+		weather?: string | null;
+		wind?: string | null;
+		uniforms?: {
+			away: string | null;
+			home: string | null;
+		};
+		player_stats?: {
+			away: {
+				batters: Array<{
+					name: string;
+					at_bats: number;
+					hits: number;
+					runs: number;
+					rbis: number;
+					average: string;
+					position: string;
+					lineup_order: number;
+				}>;
+				pitchers: Array<{
+					name: string;
+					innings_pitched: number;
+					hits: number;
+					runs: number;
+					earned_runs: number;
+					walks: number;
+					strikeouts: number;
+					era: string;
+				}>;
+			};
+			home: {
+				batters: Array<{
+					name: string;
+					at_bats: number;
+					hits: number;
+					runs: number;
+					rbis: number;
+					average: string;
+					position: string;
+					lineup_order: number;
+				}>;
+				pitchers: Array<{
+					name: string;
+					innings_pitched: number;
+					hits: number;
+					runs: number;
+					earned_runs: number;
+					walks: number;
+					strikeouts: number;
+					era: string;
+				}>;
+			};
+		};
 	};
 	svg_content: string;
 	success: boolean;
@@ -79,10 +142,28 @@ export interface DetailedGameData {
 		home: any[];
 	};
 	events: any[];
-	integration_status: string;
-	note: string;
+	integration_status?: string;
+	note?: string;
 	total_away_runs?: number;
 	total_home_runs?: number;
+	// MLB API supplementary data
+	umpires?: Array<{
+		name: string;
+		position: string;
+		id?: string | null;
+	}>;
+	managers?: {
+		away: string | null;
+		home: string | null;
+	};
+	start_time?: string | null;
+	end_time?: string | null;
+	weather?: string | null;
+	wind?: string | null;
+	uniforms?: {
+		away: string | null;
+		home: string | null;
+	};
 }
 
 export interface GamesResponse {
