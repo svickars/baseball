@@ -503,7 +503,7 @@ async function fetchGamesFromMLB(date: string): Promise<any> {
 
 	// Fetch games from MLB API with cache-busting parameter
 	const timestamp = Date.now();
-	const url = `${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}&t=${timestamp}`;
+	const url = `${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}&hydrate=linescore&t=${timestamp}`;
 
 	const response = await fetch(url);
 
@@ -570,51 +570,234 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 				let awayErrors = 0;
 				let homeErrors = 0;
 
-				// Try to get detailed inning data from game feed API
-				// This is needed because the schedule API doesn't include linescore data
-				try {
-					const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
+				// First try to get inning data from the schedule API (which now includes linescore)
+				if (gameData.linescore && gameData.linescore.innings && gameData.linescore.innings.length > 0) {
+					console.log(`Game ${gamePk} - Using linescore data from schedule API:`, gameData.linescore.innings);
 
-					const gameFeedData = await makeCachedRequest(
-						gameFeedCache,
-						gameFeedCacheKey,
-						async () => {
-							const gameFeedResponse = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`, {
-								headers: {
-									'User-Agent': 'Mozilla/5.0 (compatible; BaseballApp/1.0)',
-								},
-							});
+					innings = gameData.linescore.innings.map((inning: any) => ({
+						inning: inning.num,
+						away_runs: inning.away?.runs || 0,
+						home_runs: inning.home?.runs || 0,
+					}));
 
-							if (!gameFeedResponse.ok) {
-								throw new Error(`Game feed not available for game ${gamePk}`);
+					// Get hits and errors from linescore
+					if (gameData.linescore.teams) {
+						awayHits = gameData.linescore.teams.away?.hits || 0;
+						homeHits = gameData.linescore.teams.home?.hits || 0;
+						awayErrors = gameData.linescore.teams.away?.errors || 0;
+						homeErrors = gameData.linescore.teams.home?.errors || 0;
+					}
+
+					console.log(`Game ${gamePk} - Processed innings from schedule API:`, innings);
+				}
+				// Fallback to game feed API if schedule API doesn't have complete data
+				else {
+					try {
+						const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
+
+						console.log(`Fetching game feed for ${gamePk} (date: ${date}, status: ${status.detailedState})`);
+
+						const gameFeedData = await makeCachedRequest(
+							gameFeedCache,
+							gameFeedCacheKey,
+							async () => {
+								const gameFeedUrl = `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`;
+								console.log(`Making API call to: ${gameFeedUrl}`);
+
+								const gameFeedResponse = await fetch(gameFeedUrl, {
+									headers: {
+										'User-Agent': 'Mozilla/5.0 (compatible; BaseballApp/1.0)',
+									},
+								});
+
+								console.log(
+									`API response status for ${gamePk}: ${gameFeedResponse.status} ${gameFeedResponse.statusText}`
+								);
+
+								if (!gameFeedResponse.ok) {
+									throw new Error(`Game feed not available for game ${gamePk}: ${gameFeedResponse.status}`);
+								}
+
+								const responseData = await gameFeedResponse.json();
+								console.log(`API response data structure for ${gamePk}:`, {
+									hasGameData: !!responseData.gameData,
+									hasLiveData: !!responseData.liveData,
+									hasBoxscore: !!responseData.liveData?.boxscore,
+									hasLinescore: !!responseData.liveData?.linescore,
+									hasAllPlays: !!responseData.liveData?.plays?.allPlays,
+									boxscoreInningsCount: responseData.liveData?.boxscore?.innings?.length || 0,
+									linescoreInningsCount: responseData.liveData?.linescore?.innings?.length || 0,
+									allPlaysCount: responseData.liveData?.plays?.allPlays?.length || 0,
+									gameStatus: responseData.gameData?.status?.detailedState,
+									gameType: responseData.gameData?.game?.type,
+									reason: responseData.gameData?.status?.reason,
+									abstractGameState: responseData.gameData?.status?.abstractGameState,
+								});
+
+								return responseData;
+							},
+							30 * 1000 // 30 seconds TTL for live game feeds
+						);
+
+						// Extract inning data using the same approach as the working baseball library
+						// Use boxscore data as primary source (most complete), then fallback to linescore, then allPlays
+						const boxscore = gameFeedData.liveData?.boxscore;
+						const linescore = gameFeedData.liveData?.linescore;
+						const allPlays = gameFeedData.liveData?.plays?.allPlays;
+
+						// Use the schedule API status (authoritative) instead of live feed status
+						// The live feed API can have stale/inconsistent status data
+						const scheduleStatus = status.detailedState;
+						const liveFeedStatus = gameFeedData.gameData?.status?.detailedState;
+
+						console.log(`Game ${gamePk} - Status comparison: Schedule=${scheduleStatus}, LiveFeed=${liveFeedStatus}`);
+
+						// Primary method: Use boxscore innings data (most complete)
+						if (boxscore && boxscore.innings && boxscore.innings.length > 0) {
+							console.log(`Game ${gamePk} - Using boxscore innings data:`, boxscore.innings);
+
+							innings = boxscore.innings.map((inning: any) => ({
+								inning: inning.num,
+								away_runs: inning.away?.runs || 0,
+								home_runs: inning.home?.runs || 0,
+							}));
+
+							console.log(`Game ${gamePk} - Processed innings from boxscore:`, innings);
+
+							// Get hits and errors from boxscore teams
+							if (boxscore.teams) {
+								awayHits = boxscore.teams.away?.hits || 0;
+								homeHits = boxscore.teams.home?.hits || 0;
+								awayErrors = boxscore.teams.away?.errors || 0;
+								homeErrors = boxscore.teams.home?.errors || 0;
+							}
+						}
+						// Fallback method: Use linescore innings data
+						else if (linescore && linescore.innings && linescore.innings.length > 0) {
+							console.log(`Game ${gamePk} - Using linescore innings data:`, linescore.innings);
+
+							// Always process the data if it exists, regardless of status
+							// The MLB API provides complete data for all games
+							innings = linescore.innings.map((inning: any) => ({
+								inning: inning.num,
+								away_runs: inning.away?.runs || 0,
+								home_runs: inning.home?.runs || 0,
+							}));
+							console.log(`Game ${gamePk} - Processed innings from linescore:`, innings);
+
+							// Get hits and errors from linescore
+							if (linescore.teams) {
+								awayHits = linescore.teams.away?.hits || 0;
+								homeHits = linescore.teams.home?.hits || 0;
+								awayErrors = linescore.teams.away?.errors || 0;
+								homeErrors = linescore.teams.home?.errors || 0;
+							}
+						}
+						// Final fallback: Reconstruct from allPlays data
+						else if (allPlays && allPlays.length > 0) {
+							console.log(`Game ${gamePk} - Using allPlays reconstruction (${allPlays.length} plays)`);
+
+							// Reconstruct innings from allPlays data (same approach as working baseball library)
+							const inningsMap = new Map<
+								number,
+								{ away_runs: number; home_runs: number; away_cumulative: number; home_cumulative: number }
+							>();
+
+							// First pass: collect cumulative scores at the end of each half-inning
+							for (const play of allPlays) {
+								const inning = play.about?.inning;
+								const halfInning = play.about?.halfInning;
+
+								if (inning && halfInning) {
+									if (!inningsMap.has(inning)) {
+										inningsMap.set(inning, { away_runs: 0, home_runs: 0, away_cumulative: 0, home_cumulative: 0 });
+									}
+
+									const inningData = inningsMap.get(inning)!;
+
+									// Update cumulative scores
+									inningData.away_cumulative = play.result?.awayScore || 0;
+									inningData.home_cumulative = play.result?.homeScore || 0;
+								}
 							}
 
-							return gameFeedResponse.json();
-						},
-						30 * 1000 // 30 seconds TTL for live game feeds
-					);
+							// Second pass: calculate runs per inning by comparing with previous inning
+							let previousAwayRuns = 0;
+							let previousHomeRuns = 0;
 
-					// Extract inning data from game feed
-					const linescore = gameFeedData.liveData?.linescore;
-					if (linescore && linescore.innings) {
-						innings = linescore.innings.map((inning: any) => ({
-							inning: inning.num,
-							away_runs: inning.away?.runs || 0,
-							home_runs: inning.home?.runs || 0,
-						}));
+							Array.from(inningsMap.entries()).forEach(([inning, data]) => {
+								data.away_runs = data.away_cumulative - previousAwayRuns;
+								data.home_runs = data.home_cumulative - previousHomeRuns;
 
-						// Get hits and errors from linescore
-						if (linescore.teams) {
-							awayHits = linescore.teams.away?.hits || 0;
-							homeHits = linescore.teams.home?.hits || 0;
-							awayErrors = linescore.teams.away?.errors || 0;
-							homeErrors = linescore.teams.home?.errors || 0;
+								previousAwayRuns = data.away_cumulative;
+								previousHomeRuns = data.home_cumulative;
+							});
+
+							// Convert map to array
+							innings = Array.from(inningsMap.entries()).map(([inning, data]) => ({
+								inning,
+								away_runs: data.away_runs,
+								home_runs: data.home_runs,
+							}));
+
+							console.log(`Game ${gamePk} - Reconstructed innings from plays:`, innings);
+
+							// Get hits and errors from linescore if available
+							if (linescore && linescore.teams) {
+								awayHits = linescore.teams.away?.hits || 0;
+								homeHits = linescore.teams.home?.hits || 0;
+								awayErrors = linescore.teams.away?.errors || 0;
+								homeErrors = linescore.teams.home?.errors || 0;
+							}
+						} else {
+							console.log(`Game ${gamePk} - No inning data available from any source`);
+						}
+
+						// For Final games, ensure we have 9 innings of data
+						// If the game is marked as Final in the schedule, it should have complete data
+						if (scheduleStatus === 'Final' && innings.length > 0 && innings.length < 9) {
+							console.log(
+								`Game ${gamePk} - Final game with only ${innings.length} innings, filling in missing innings with zeros`
+							);
+
+							// Fill in missing innings with zeros up to 9 innings
+							const filledInnings = [];
+							for (let i = 1; i <= 9; i++) {
+								const existingInning = innings.find((inning) => inning.inning === i);
+								if (existingInning) {
+									filledInnings.push(existingInning);
+								} else {
+									filledInnings.push({
+										inning: i,
+										away_runs: 0,
+										home_runs: 0,
+									});
+								}
+							}
+							innings = filledInnings;
+							console.log(`Game ${gamePk} - Filled innings to 9:`, innings);
+						}
+					} catch (feedError) {
+						// Game feed not available (likely scheduled game that hasn't started)
+						// This is normal for scheduled games
+						innings = [];
+					}
+				}
+
+				// Use the more reliable live feed status if available, otherwise fall back to schedule status
+				let finalStatus = status.detailedState || 'Unknown';
+				try {
+					const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
+					const cachedGameFeed = gameFeedCache.get(gameFeedCacheKey);
+					if (cachedGameFeed && (cachedGameFeed as any).gameData?.status?.detailedState) {
+						const liveFeedStatus = (cachedGameFeed as any).gameData.status.detailedState;
+						// Use live feed status if it's more specific than schedule status
+						if (liveFeedStatus !== 'Pre-Game' && liveFeedStatus !== 'Scheduled') {
+							finalStatus = liveFeedStatus;
 						}
 					}
-				} catch (feedError) {
-					// Game feed not available (likely scheduled game that hasn't started)
-					// This is normal for scheduled games
-					innings = [];
+				} catch (e) {
+					// Use schedule status if live feed not available
 				}
 
 				const game: Game = {
@@ -626,7 +809,7 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 					game_number: gameData.gameNumber || 1,
 					start_time: startTime,
 					location: `${gameData.venue?.name || ''}, ${gameData.venue?.city || ''}`,
-					status: status.detailedState || 'Unknown',
+					status: finalStatus,
 					game_pk: gamePk,
 					is_live: status.codedGameState === 'I', // Only In Progress games are live
 					inning: gameData.linescore?.currentInning || '',
@@ -640,7 +823,7 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 					home_errors: homeErrors,
 					// Include MLB API status data for more reliable status determination
 					mlbStatus: {
-						detailedState: status.detailedState,
+						detailedState: finalStatus,
 						codedGameState: status.codedGameState,
 					},
 				};
@@ -714,7 +897,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 				const homeCode = parts[4];
 				const gameNumber = parseInt(parts[5]);
 
-				// Get schedule data with caching
+				// Get schedule data with caching and linescore hydration
 				const scheduleCacheKey = createCacheKey('schedule', date);
 				const scheduleData = await makeCachedRequest(
 					scheduleCache,
@@ -723,7 +906,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 						const [year, month, day] = date.split('-').map(Number);
 						const timestamp = Date.now();
 						const scheduleResponse = await fetch(
-							`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}&t=${timestamp}`
+							`${MLB_API_BASE}/schedule?sportId=1&date=${month}/${day}/${year}&hydrate=linescore&t=${timestamp}`
 						);
 
 						if (!scheduleResponse.ok) {
@@ -778,50 +961,63 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 				const awayScore = awayTeam.score || 0;
 				const homeScore = homeTeam.score || 0;
 
-				// Initialize basic inning data
-				let inningList = Array.from({ length: 9 }, (_, i) => ({
-					inning: i + 1,
-					away: 0,
-					home: 0,
-				}));
+				// Process inning data using the same logic as getGamesForDate
+				let inningList: any[] = [];
 
-				// Try to get detailed game feed data with caching
-				try {
-					const gamePk = gameData.gamePk;
-					if (gamePk) {
-						const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
+				// First try to get inning data from the schedule API (which now includes linescore)
+				if (gameData.linescore && gameData.linescore.innings && gameData.linescore.innings.length > 0) {
+					console.log(`Game ${gameData.gamePk} - Using linescore data from schedule API:`, gameData.linescore.innings);
 
-						const gameFeedData = await makeCachedRequest(
-							gameFeedCache,
-							gameFeedCacheKey,
-							async () => {
-								const gameFeedResponse = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`, {
-									headers: {
-										'User-Agent': 'Mozilla/5.0 (compatible; BaseballApp/1.0)',
-									},
-								});
+					inningList = gameData.linescore.innings.map((inning: any) => ({
+						inning: inning.num,
+						away_runs: inning.away?.runs || 0,
+						home_runs: inning.home?.runs || 0,
+					}));
 
-								if (!gameFeedResponse.ok) {
-									throw new Error(`Game feed not available for game ${gamePk}`);
-								}
+					console.log(`Game ${gameData.gamePk} - Processed innings from schedule API:`, inningList);
+				}
+				// Fallback to game feed API if schedule API doesn't have complete data
+				else {
+					try {
+						const gamePk = gameData.gamePk;
+						if (gamePk) {
+							const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
 
-								return gameFeedResponse.json();
-							},
-							30 * 1000 // 30 seconds TTL for live game feeds
-						);
+							const gameFeedData = await makeCachedRequest(
+								gameFeedCache,
+								gameFeedCacheKey,
+								async () => {
+									const gameFeedResponse = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`, {
+										headers: {
+											'User-Agent': 'Mozilla/5.0 (compatible; BaseballApp/1.0)',
+										},
+									});
 
-						// Extract inning data from game feed
-						const linescore = gameFeedData.liveData?.linescore;
-						if (linescore && linescore.innings) {
-							inningList = linescore.innings.map((inning: any) => ({
-								inning: inning.num,
-								away: inning.away?.runs || 0,
-								home: inning.home?.runs || 0,
-							}));
+									if (!gameFeedResponse.ok) {
+										throw new Error(`Game feed not available for game ${gamePk}`);
+									}
+
+									return gameFeedResponse.json();
+								},
+								30 * 1000 // 30 seconds TTL for live game feeds
+							);
+
+							// Extract inning data from game feed
+							const linescore = gameFeedData.liveData?.linescore;
+							if (linescore && linescore.innings) {
+								inningList = linescore.innings.map((inning: any) => ({
+									inning: inning.num,
+									away_runs: inning.away?.runs || 0,
+									home_runs: inning.home?.runs || 0,
+								}));
+							}
 						}
+					} catch (feedError) {
+						console.log(`Error fetching detailed data for game ${gameData.gamePk}:`, feedError);
+						// Game feed not available (likely scheduled game that hasn't started)
+						// This is normal for scheduled games
+						inningList = [];
 					}
-				} catch (feedError) {
-					console.log(`Error fetching detailed data for game ${gameData.gamePk}:`, feedError);
 				}
 
 				// Return the game data

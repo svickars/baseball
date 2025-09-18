@@ -158,6 +158,21 @@ export function useBaseballApp() {
 						);
 						setLiveGames(liveGameIds);
 
+						// Also update individual live games for more frequent updates
+						liveGameIds.forEach(async (gameId) => {
+							try {
+								const gameResponse = await baseballApi.getGameDetails(gameId);
+								if (gameResponse.success) {
+									// Update the specific game in the games array
+									setGames((prevGames) =>
+										prevGames.map((game) => (game.id === gameId ? { ...game, ...gameResponse } : game))
+									);
+								}
+							} catch (error) {
+								console.error(`Error updating live game ${gameId}:`, error);
+							}
+						});
+
 						// Stop auto-refresh if no more live games
 						if (liveGameIds.size === 0) {
 							stopAutoRefresh();
@@ -167,7 +182,7 @@ export function useBaseballApp() {
 					console.error('Error refreshing live games:', error);
 				}
 			}
-		}, 30000); // Refresh every 30 seconds
+		}, 10000); // Refresh every 10 seconds for live games
 	}, [selectedDate]);
 
 	const stopAutoRefresh = useCallback(() => {
@@ -215,7 +230,7 @@ export function useBaseballApp() {
 				} catch (error) {
 					console.error('Error fetching live data:', error);
 				}
-			}, 10000);
+			}, 5000); // Update every 5 seconds for live games
 
 			// Check for delayed updates every second
 			delayCheckIntervalRef.current = setInterval(() => {

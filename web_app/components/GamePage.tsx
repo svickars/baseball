@@ -130,66 +130,93 @@ const getInningScore = (inning: number, game: any, isAway: boolean) => {
 	// Use detailed data if available, otherwise fall back to basic game data
 	const innings = game.detailedData?.innings || game.innings || [];
 
-	if (innings && innings.length > 0) {
-		const inningData = innings.find((i: any) => i.inning === inning);
-
-		if (!inningData) {
-			// No data for this inning
-			if (game.status === 'Final') {
-				return 'X'; // Show 'X' for unplayed innings in final games
-			}
-			return ''; // Show nothing for future innings in live/upcoming games
-		}
-
-		// Get the appropriate score based on team (away = top half, home = bottom half)
-		const score = isAway ? inningData.away_runs : inningData.home_runs;
-
-		// Handle special cases for final games
-		if (game.status === 'Final') {
-			// Special case: bottom of 9th when home team is winning (game ended in top of 9th)
-			if (inning === 9 && !isAway && game.home_score && game.away_score && game.home_score > game.away_score) {
-				// Check if home team was already winning after 8 innings
-				let homeRunsThrough8 = 0;
-				let awayRunsThrough8 = 0;
-
-				for (let i = 1; i <= 8; i++) {
-					const prevInningData = innings.find((inn: any) => inn.inning === i);
-					if (prevInningData) {
-						homeRunsThrough8 += prevInningData.home_runs || 0;
-						awayRunsThrough8 += prevInningData.away_runs || 0;
-					}
-				}
-
-				// If home team was already winning after 8 innings, bottom of 9th wasn't played
-				if (homeRunsThrough8 > awayRunsThrough8) {
-					return 'X';
-				}
-			}
-
-			// For regular innings, return the actual score
-			return score || 0;
-		}
-
-		// For live games, show current inning or future innings
-		if (game.status === 'Live' || game.is_live) {
-			const currentInning = parseInt(game.inning || '1');
-			if (inning < currentInning) {
-				// Past innings - show actual score
-				return score || 0;
-			} else if (inning === currentInning) {
-				// Current inning - show current score or 0 if no runs yet
-				return score || 0;
-			} else {
-				// Future innings - show nothing
-				return '';
-			}
-		}
-
-		// For upcoming games, show nothing
+	// Handle upcoming games - show nothing for any inning
+	if (game.status === 'Scheduled' || game.status === 'Pre-Game') {
 		return '';
 	}
 
-	// No inning data available
+	// Handle live games - only show data for completed half-innings
+	if (game.status === 'In Progress' || game.status === 'Live' || game.is_live) {
+		if (innings && innings.length > 0) {
+			const inningData = innings.find((i: any) => i.inning === inning);
+
+			if (!inningData) {
+				// No data for this inning - it hasn't been played yet
+				return '';
+			}
+
+			// For live games, we need to check if the half-inning has actually been completed
+			// We can't rely on the API data alone since it shows 0 for unplayed half-innings
+			// We need to check the current inning and half-inning status
+			const currentInning = parseInt(game.inning || '1');
+			const isTopHalf = game.inning_state === 'Top' || game.inning_state === 'top';
+
+			// If we're looking at a future inning, show nothing
+			if (inning > currentInning) {
+				return '';
+			}
+
+			// If we're looking at the current inning, only show data for completed half-innings
+			if (inning === currentInning) {
+				// For the current inning, only show away team data if we're past the top half
+				// Only show home team data if we're past the bottom half
+				if (isAway && !isTopHalf) {
+					// We're past the top half of current inning, away team data is available
+					const score = inningData.away_runs;
+					return score !== undefined ? score : '';
+				} else if (!isAway && !isTopHalf) {
+					// We're past the bottom half of current inning, home team data is available
+					const score = inningData.home_runs;
+					return score !== undefined ? score : '';
+				} else {
+					// Half-inning hasn't been completed yet
+					return '';
+				}
+			}
+
+			// For completed innings, show the actual score
+			const score = isAway ? inningData.away_runs : inningData.home_runs;
+			return score !== undefined ? score : '';
+		}
+		return '';
+	}
+
+	// Handle final games
+	if (game.status === 'Final') {
+		if (innings && innings.length > 0) {
+			const inningData = innings.find((i: any) => i.inning === inning);
+
+			if (!inningData) {
+				// No data for this inning - check if it's bottom of 9th and home team was winning
+				if (inning === 9 && !isAway) {
+					// Check if home team was already winning after 8 innings
+					let homeRunsThrough8 = 0;
+					let awayRunsThrough8 = 0;
+
+					for (let i = 1; i <= 8; i++) {
+						const prevInningData = innings.find((inn: any) => inn.inning === i);
+						if (prevInningData) {
+							homeRunsThrough8 += prevInningData.home_runs || 0;
+							awayRunsThrough8 += prevInningData.away_runs || 0;
+						}
+					}
+
+					// If home team was winning after 8 innings, show 'X' for bottom of 9th
+					if (homeRunsThrough8 > awayRunsThrough8) {
+						return 'X';
+					}
+				}
+				return ''; // Show nothing for unplayed innings in final games
+			}
+
+			// Get the appropriate score based on team (away = top half, home = bottom half)
+			const score = isAway ? inningData.away_runs : inningData.home_runs;
+			return score !== undefined ? score : '';
+		}
+		return '';
+	}
+
+	// Default case - show nothing
 	return '';
 };
 
@@ -316,8 +343,8 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 				...transformedData,
 				innings: transformedData.innings.map((inning: any) => ({
 					inning: inning.inning,
-					away_runs: inning.away || 0,
-					home_runs: inning.home || 0,
+					away_runs: inning.away_runs || 0,
+					home_runs: inning.home_runs || 0,
 				})),
 				batters: gameData.game_data.player_stats?.away?.batters
 					? {
@@ -953,8 +980,36 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 									const isUpcoming = gameStatus.status === 'upcoming';
 
 									// Determine status display and class modifier using MLB API data
-									const statusDisplay = gameStatus.displayText;
+									let statusDisplay = gameStatus.displayText;
 									const statusClassModifier = gameStatus.status;
+
+									// For live games, show inning information with chevron icons
+									if (isLive && originalGame?.inning && originalGame?.inning_state) {
+										const inningNum = parseInt(originalGame.inning);
+										const inningState = originalGame.inning_state.toLowerCase();
+
+										// Convert inning number to ordinal
+										const getOrdinal = (num: number) => {
+											const j = num % 10;
+											const k = num % 100;
+											if (j === 1 && k !== 11) return num + 'ST';
+											if (j === 2 && k !== 12) return num + 'ND';
+											if (j === 3 && k !== 13) return num + 'RD';
+											return num + 'TH';
+										};
+
+										const ordinalInning = getOrdinal(inningNum);
+
+										if (inningState === 'top') {
+											statusDisplay = `↑ ${ordinalInning}`;
+										} else if (inningState === 'bottom') {
+											statusDisplay = `↓ ${ordinalInning}`;
+										} else if (inningState === 'middle') {
+											statusDisplay = `→ ${ordinalInning}`;
+										} else if (inningState === 'end') {
+											statusDisplay = `END ${ordinalInning}`;
+										}
+									}
 
 									return statusDisplay ? (
 										<div
