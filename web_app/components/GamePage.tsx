@@ -1197,7 +1197,7 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 					<nav className="flex justify-center -mb-px">
 						{[
 							{ id: 'preview', label: 'Game Preview' },
-							{ id: 'traditional', label: 'Traditional Scorecard' },
+							{ id: 'traditional', label: 'Scorecard' },
 							{ id: 'stats', label: 'Statistics' },
 							{ id: 'events', label: 'Events' },
 						].map((tab: { id: string; label: string }, index) => (
