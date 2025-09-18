@@ -1,7 +1,5 @@
 'use client';
 
-import { WeakRef } from 'weakref';
-
 // Resource types
 export type ResourceType = 'cache' | 'interval' | 'listener' | 'image' | 'svg' | 'data';
 

@@ -127,7 +127,7 @@ class DataPrefetcher {
 			this.state.retryCount.delete(gameId);
 
 			// Notify listeners
-			this.notifyListeners(gameId, data, null);
+			this.notifyListeners(gameId, data, undefined);
 		} catch (error) {
 			this.state.retryCount.set(gameId, retryCount + 1);
 

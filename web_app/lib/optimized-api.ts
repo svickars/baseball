@@ -25,6 +25,7 @@ class OptimizedApiClient {
 	private activeRequests = 0;
 	private maxConcurrentRequests = 5;
 	private retryConfig: RetryConfig;
+	private requestTimings = new Map<string, number>();
 
 	constructor() {
 		this.api = axios.create({
@@ -52,7 +53,9 @@ class OptimizedApiClient {
 		this.api.interceptors.request.use(
 			(config) => {
 				// Add request timestamp for tracking
-				config.metadata = { startTime: Date.now() };
+				const requestId = `${config.method}-${config.url}-${Date.now()}`;
+				this.requestTimings.set(requestId, Date.now());
+				(config as any).requestId = requestId;
 				return config;
 			},
 			(error) => {
@@ -65,8 +68,13 @@ class OptimizedApiClient {
 		this.api.interceptors.response.use(
 			(response) => {
 				// Log response time
-				const duration = Date.now() - (response.config.metadata?.startTime || 0);
-				console.log(`API Response: ${response.config.url} - ${duration}ms`);
+				const requestId = (response.config as any).requestId;
+				const startTime = this.requestTimings.get(requestId);
+				if (startTime) {
+					const duration = Date.now() - startTime;
+					console.log(`API Response: ${response.config.url} - ${duration}ms`);
+					this.requestTimings.delete(requestId);
+				}
 				return response;
 			},
 			async (error) => {

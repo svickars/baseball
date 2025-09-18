@@ -1,6 +1,6 @@
 'use client';
 
-import { Game, GameData, DetailedGameData, BatterData, PitcherData } from '@/types';
+import { Game, GameData, DetailedGameData } from '@/types';
 
 // Normalized data structures for efficient processing
 export interface NormalizedGame {
@@ -145,7 +145,7 @@ class DataNormalizer {
 			},
 			metadata: {
 				lastUpdated: now,
-				isLive: this.isGameLive(gameData.game_data.status),
+				isLive: this.isGameLive(gameData.game_data.status || ''),
 				gameType: this.determineGameType(gameData.game_data.game_date_str),
 			},
 		};

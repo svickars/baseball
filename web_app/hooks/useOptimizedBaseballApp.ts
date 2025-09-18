@@ -47,11 +47,11 @@ export function useOptimizedBaseballApp() {
 			// Create a basic normalized version for games list
 			return {
 				id: game.id,
-				date: game.game_date_str,
+				date: game.id.split('-').slice(0, 3).join('-'), // Extract date from game ID
 				awayTeam: {
 					id: game.away_team.toLowerCase().replace(/\s+/g, '-'),
 					name: game.away_team,
-					abbreviation: game.away_team_abbreviation,
+					abbreviation: game.away_code,
 					score: game.away_score,
 					hits: game.away_hits || 0,
 					errors: game.away_errors || 0,
@@ -59,14 +59,20 @@ export function useOptimizedBaseballApp() {
 				homeTeam: {
 					id: game.home_team.toLowerCase().replace(/\s+/g, '-'),
 					name: game.home_team,
-					abbreviation: game.home_team_abbreviation,
+					abbreviation: game.home_code,
 					score: game.home_score,
 					hits: game.home_hits || 0,
 					errors: game.home_errors || 0,
 				},
 				status: game.status,
-				venue: game.venue || 'Unknown',
-				innings: game.inning_list || [],
+				venue: game.location || 'Unknown',
+				innings: (game.innings || []).map((inning) => ({
+					number: inning.inning,
+					awayRuns: inning.away_runs,
+					homeRuns: inning.home_runs,
+					topEvents: [],
+					bottomEvents: [],
+				})),
 				batters: { away: [], home: [] },
 				pitchers: { away: [], home: [] },
 				metadata: {
