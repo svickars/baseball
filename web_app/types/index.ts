@@ -62,11 +62,16 @@ export interface GameData {
 		};
 		start_time?: string | null;
 		end_time?: string | null;
-		weather?: string | null;
+		weather?: string | null | { condition: string };
 		wind?: string | null;
 		uniforms?: {
 			away: string | null;
 			home: string | null;
+		};
+		play_by_play?: {
+			atBats: Map<string, any[]>;
+			substitutions: Map<string, any[]>;
+			inningResults: Map<string, any[]>;
 		};
 		player_stats?: {
 			away: {

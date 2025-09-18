@@ -201,6 +201,29 @@ function extractBatterStats(
 		})
 		.map((batter: any) => {
 			const playerName = batter.person?.fullName || batter.name || 'Unknown';
+			const stats = batter.stats?.batting || batter.stats || {};
+
+			// Calculate slash line statistics
+			const atBats = stats.atBats || 0;
+			const hits = stats.hits || 0;
+			const walks = stats.baseOnBalls || stats.walks || 0;
+			const hitByPitch = stats.hitByPitch || 0;
+			const sacrificeFlies = stats.sacrificeFlies || 0;
+			const singles = stats.singles || 0;
+			const doubles = stats.doubles || 0;
+			const triples = stats.triples || 0;
+			const homeRuns = stats.homeRuns || 0;
+
+			// Calculate batting average
+			const battingAverage = atBats > 0 ? hits / atBats : 0;
+
+			// Calculate on-base percentage (H + BB + HBP) / (AB + BB + HBP + SF)
+			const plateAppearances = atBats + walks + hitByPitch + sacrificeFlies;
+			const onBasePercentage = plateAppearances > 0 ? (hits + walks + hitByPitch) / plateAppearances : 0;
+
+			// Calculate slugging percentage (1B + 2*2B + 3*3B + 4*HR) / AB
+			const totalBases = singles + doubles * 2 + triples * 3 + homeRuns * 4;
+			const sluggingPercentage = atBats > 0 ? totalBases / atBats : 0;
 
 			// Determine substitution type from all_positions array first
 			let substitutionType = 'DEF'; // Default to defensive substitution
@@ -219,18 +242,22 @@ function extractBatterStats(
 				substitutionType = apiSubstitutionData.type;
 			}
 
+			// Map position abbreviations to numbers
+			const positionNumber = mapPositionToNumber(batter.position?.abbreviation || '?');
+
 			return {
 				name: batter.person?.fullName || 'Unknown',
-				at_bats: batter.stats?.batting?.atBats || batter.stats?.atBats || 0,
-				hits: batter.stats?.batting?.hits || batter.stats?.hits || 0,
-				runs: batter.stats?.batting?.runs || batter.stats?.runs || 0,
-				rbis: batter.stats?.batting?.rbi || batter.stats?.rbi || 0,
-				average: batter.stats?.batting?.avg
-					? parseFloat(batter.stats.batting.avg).toFixed(3)
-					: batter.stats?.avg
-					? parseFloat(batter.stats.avg).toFixed(3)
-					: '0.000',
-				position: batter.position?.abbreviation || '?',
+				at_bats: atBats,
+				hits: hits,
+				runs: stats.runs || 0,
+				rbis: stats.rbi || 0,
+				walks: walks,
+				strikeouts: stats.strikeOuts || stats.strikeouts || 0,
+				average: battingAverage.toFixed(3),
+				onBasePercentage: onBasePercentage.toFixed(3),
+				sluggingPercentage: sluggingPercentage.toFixed(3),
+				position: positionNumber,
+				positionAbbreviation: batter.position?.abbreviation || '?',
 				lineup_order: batter.stats?.battingOrder || batter.stats?.batting?.battingOrder || 0,
 				jersey_number: batter.jerseyNumber ? String(batter.jerseyNumber) : '0',
 				// Add substitution data
@@ -241,10 +268,223 @@ function extractBatterStats(
 				substitution_type: substitutionType,
 				substitution_inning: apiSubstitutionData?.inning || 9,
 				substitution_half_inning: apiSubstitutionData?.halfInning || 'top',
+				// Add detailed stats for slash line
+				singles: singles,
+				doubles: doubles,
+				triples: triples,
+				homeRuns: homeRuns,
+				hitByPitch: hitByPitch,
+				sacrificeFlies: sacrificeFlies,
 			};
 		});
 
 	return result;
+}
+
+// Helper function to map position abbreviations to numbers
+function mapPositionToNumber(position: string): string {
+	const positionMap: { [key: string]: string } = {
+		P: '1', // Pitcher
+		C: '2', // Catcher
+		'1B': '3', // First Base
+		'2B': '4', // Second Base
+		'3B': '5', // Third Base
+		SS: '6', // Shortstop
+		LF: '7', // Left Field
+		CF: '8', // Center Field
+		RF: '9', // Right Field
+		DH: '10', // Designated Hitter
+		PH: 'PH', // Pinch Hitter
+		PR: 'PR', // Pinch Runner
+	};
+
+	return positionMap[position] || position;
+}
+
+// Helper function to process play-by-play data and extract at-bat results
+function processPlayByPlayData(allPlays: any[], players: any): any {
+	const playByPlayData = {
+		atBats: new Map<string, any[]>(),
+		substitutions: new Map<string, any[]>(),
+		inningResults: new Map<string, any[]>(),
+	};
+
+	allPlays.forEach((play: any) => {
+		const inning = play.about?.inning || 0;
+		const halfInning = play.about?.halfInning || 'top';
+		const batterId = play.matchup?.batter?.id;
+		const pitcherId = play.matchup?.pitcher?.id;
+
+		if (batterId && pitcherId) {
+			const batter = players[batterId];
+			const pitcher = players[pitcherId];
+
+			if (batter && pitcher) {
+				const atBatKey = `${batter.person?.fullName || 'Unknown'}-${inning}-${halfInning}`;
+
+				if (!playByPlayData.atBats.has(atBatKey)) {
+					playByPlayData.atBats.set(atBatKey, []);
+				}
+
+				const atBatResult = {
+					batter: batter.person?.fullName || 'Unknown',
+					batterId: batterId,
+					batterNumber: batter.jerseyNumber || '0',
+					pitcher: pitcher.person?.fullName || 'Unknown',
+					pitcherId: pitcherId,
+					pitcherNumber: pitcher.jerseyNumber || '0',
+					inning: inning,
+					halfInning: halfInning,
+					result: play.result?.event || 'Unknown',
+					description: play.result?.description || '',
+					gotOnBase:
+						play.result?.eventType === 'Hit' ||
+						play.result?.eventType === 'Walk' ||
+						play.result?.eventType === 'HitByPitch',
+					rbi: play.result?.rbi || 0,
+					outs: play.result?.outs || 0,
+					pitches: play.pitchHand?.pitches || [],
+					atBatResult: mapAtBatResult(play.result?.event, play.result?.description),
+				};
+
+				playByPlayData.atBats.get(atBatKey)!.push(atBatResult);
+			}
+		}
+	});
+
+	return playByPlayData;
+}
+
+// Helper function to map MLB API at-bat results to scorecard abbreviations
+function mapAtBatResult(event: string, description: string): string {
+	if (!event) return '';
+
+	const eventLower = event.toLowerCase();
+	const descLower = description.toLowerCase();
+
+	// Hit types
+	if (eventLower.includes('single')) return '1B';
+	if (eventLower.includes('double')) return '2B';
+	if (eventLower.includes('triple')) return '3B';
+	if (eventLower.includes('home run')) return 'HR';
+
+	// Strikeouts
+	if (eventLower.includes('strikeout') || eventLower.includes('strike out')) {
+		if (descLower.includes('swinging')) return 'K';
+		if (descLower.includes('called')) return 'K';
+		return 'K';
+	}
+
+	// Walks
+	if (eventLower.includes('walk')) return 'BB';
+	if (eventLower.includes('intentional walk')) return 'IBB';
+
+	// Hit by pitch
+	if (eventLower.includes('hit by pitch')) return 'HBP';
+
+	// Outs
+	if (eventLower.includes('groundout') || eventLower.includes('ground out')) return 'G';
+	if (eventLower.includes('flyout') || eventLower.includes('fly out')) return 'F';
+	if (eventLower.includes('lineout') || eventLower.includes('line out')) return 'L';
+	if (eventLower.includes('popout') || eventLower.includes('pop out')) return 'P';
+
+	// Sacrifice
+	if (eventLower.includes('sacrifice fly')) return 'SF';
+	if (eventLower.includes('sacrifice bunt')) return 'SAC';
+
+	// Fielders choice
+	if (eventLower.includes('fielders choice')) return 'FC';
+
+	// Error
+	if (eventLower.includes('error')) return 'E';
+
+	return event.substring(0, 3).toUpperCase();
+}
+
+// Helper function to extract umpires from game feed data
+function extractUmpires(gameFeedData: any): Array<{ name: string; position: string; id?: string | null }> {
+	const umpires: Array<{ name: string; position: string; id?: string | null }> = [];
+
+	if (gameFeedData.liveData?.boxscore?.officials) {
+		gameFeedData.liveData.boxscore.officials.forEach((official: any) => {
+			umpires.push({
+				name: official.person?.fullName || 'Unknown Umpire',
+				position: official.officialType || 'Unknown',
+				id: official.person?.id?.toString(),
+			});
+		});
+	}
+
+	return umpires.length > 0 ? umpires : generateFallbackUmpires();
+}
+
+// Helper function to extract managers from game feed data
+function extractManagers(gameFeedData: any): { away: string | null; home: string | null } {
+	const managers = { away: null as string | null, home: null as string | null };
+
+	if (gameFeedData.liveData?.boxscore?.teams) {
+		const awayManager = gameFeedData.liveData.boxscore.teams.away?.teamStats?.managers?.[0];
+		const homeManager = gameFeedData.liveData.boxscore.teams.home?.teamStats?.managers?.[0];
+
+		if (awayManager?.person?.fullName) {
+			managers.away = awayManager.person.fullName;
+		}
+		if (homeManager?.person?.fullName) {
+			managers.home = homeManager.person.fullName;
+		}
+	}
+
+	return managers.away || managers.home ? managers : generateFallbackManagers();
+}
+
+// Helper function to extract weather information
+function extractWeather(gameFeedData: any): string | null {
+	if (gameFeedData.gameData?.weather) {
+		return typeof gameFeedData.gameData.weather === 'string'
+			? gameFeedData.gameData.weather
+			: gameFeedData.gameData.weather?.condition || 'Clear, 72°F';
+	}
+	return 'Clear, 72°F';
+}
+
+// Helper function to extract uniform information
+function extractUniforms(gameFeedData: any): { away: string; home: string } {
+	const uniforms = { away: '', home: '' };
+
+	// MLB API doesn't typically provide uniform information in the game feed
+	// This would need to be supplemented with additional data sources
+	return uniforms;
+}
+
+// Helper function to extract start time
+function extractStartTime(gameFeedData: any): string | null {
+	if (gameFeedData.gameData?.game?.gameDate) {
+		try {
+			const gameDate = new Date(gameFeedData.gameData.game.gameDate);
+			return gameDate.toLocaleTimeString('en-US', {
+				hour: 'numeric',
+				minute: '2-digit',
+			});
+		} catch (e) {
+			// Keep original format if parsing fails
+		}
+	}
+	return null;
+}
+
+// Helper function to extract end time
+function extractEndTime(gameFeedData: any): string | null {
+	// MLB API doesn't typically provide end time in the game feed
+	// This would need to be calculated or supplemented
+	return null;
+}
+
+// Helper function to extract wind information
+function extractWind(gameFeedData: any): string | null {
+	if (gameFeedData.gameData?.weather?.wind) {
+		return gameFeedData.gameData.weather.wind;
+	}
+	return null;
 }
 
 // Helper function to process substitution events and determine types and innings
@@ -323,27 +563,182 @@ function processSubstitutionEvents(
 
 // Helper function to extract pitcher statistics from MLB API data
 function extractPitcherStats(pitchers: any[]): any[] {
-	const result = pitchers.map((pitcher: any) => ({
-		name: pitcher.person?.fullName || 'Unknown',
-		innings_pitched: pitcher.stats?.pitching?.inningsPitched
-			? parseFloat(pitcher.stats.pitching.inningsPitched)
-			: pitcher.stats?.inningsPitched
-			? parseFloat(pitcher.stats.inningsPitched)
-			: 0.0,
-		hits: pitcher.stats?.pitching?.hits || pitcher.stats?.hits || 0,
-		runs: pitcher.stats?.pitching?.runs || pitcher.stats?.runs || 0,
-		earned_runs: pitcher.stats?.pitching?.earnedRuns || pitcher.stats?.earnedRuns || 0,
-		walks: pitcher.stats?.pitching?.baseOnBalls || pitcher.stats?.baseOnBalls || 0,
-		strikeouts: pitcher.stats?.pitching?.strikeOuts || pitcher.stats?.strikeOuts || 0,
-		era: pitcher.stats?.pitching?.era
-			? parseFloat(pitcher.stats.pitching.era).toFixed(2)
-			: pitcher.stats?.era
-			? parseFloat(pitcher.stats.era).toFixed(2)
-			: '0.00',
-		jersey_number: pitcher.jerseyNumber ? String(pitcher.jerseyNumber) : '0',
-	}));
+	console.log('extractPitcherStats called with:', pitchers.length, 'pitchers');
+
+	const result = pitchers.map((pitcher: any, index: number) => {
+		console.log(`Pitcher ${index} object:`, pitcher);
+		console.log(`Pitcher ${index} keys:`, Object.keys(pitcher));
+
+		const stats = pitcher.stats?.pitching || pitcher.stats || {};
+
+		console.log(`Pitcher ${index} stats debug:`, {
+			hasStats: !!pitcher.stats,
+			hasPitchingStats: !!pitcher.stats?.pitching,
+			statsKeys: pitcher.stats ? Object.keys(pitcher.stats) : [],
+			inningsPitched: stats.inningsPitched,
+			hits: stats.hits,
+			earnedRuns: stats.earnedRuns,
+		});
+
+		// Calculate innings pitched
+		const inningsPitched = stats.inningsPitched ? parseFloat(stats.inningsPitched) : 0.0;
+		const earnedRuns = stats.earnedRuns || 0;
+		const hits = stats.hits || 0;
+		const walks = stats.baseOnBalls || 0;
+		const strikeouts = stats.strikeOuts || 0;
+		const totalPitches = stats.pitchesThrown || 0;
+		const strikes = stats.strikes || 0;
+
+		// Calculate ERA (earned runs per 9 innings)
+		const era = inningsPitched > 0 ? (earnedRuns * 9) / inningsPitched : 0;
+
+		// Calculate WHIP (walks + hits per inning pitched)
+		const whip = inningsPitched > 0 ? (walks + hits) / inningsPitched : 0;
+
+		// Determine pitcher decision
+		let decision = '';
+		if (stats.wins > 0) decision = 'W';
+		else if (stats.losses > 0) decision = 'L';
+		else if (stats.saves > 0) decision = 'S';
+		else if (stats.holds > 0) decision = 'H';
+		else if (stats.blownSaves > 0) decision = 'BS';
+
+		return {
+			name: pitcher.fullName || pitcher.person?.fullName || 'Unknown Pitcher',
+			position: 'P',
+			innings_pitched: inningsPitched,
+			hits: hits,
+			runs: stats.runs || 0,
+			earned_runs: earnedRuns,
+			walks: walks,
+			strikeouts: strikeouts,
+			number: pitcher.primaryNumber
+				? String(pitcher.primaryNumber)
+				: pitcher.jerseyNumber
+				? String(pitcher.jerseyNumber)
+				: '0',
+			handedness: pitcher.pitchHand?.code || pitcher.person?.batSide?.code || 'R', // Use pitch hand as handedness
+			wls: decision,
+			batters_faced: stats.battersFaced || 0,
+			intentional_walks: stats.intentionalWalks || 0,
+			hit_by_pitch: stats.hitBatsmen || 0,
+			balks: stats.balks || 0,
+			wild_pitches: stats.wildPitches || 0,
+			homeruns: stats.homeRuns || 0,
+			total_pitches: totalPitches,
+			strikes: strikes,
+			era: Math.round(era * 100) / 100, // Round to 2 decimal places
+			whip: Math.round(whip * 100) / 100, // Round to 2 decimal places
+		};
+	});
 
 	return result;
+}
+
+// Helper function to extract ALL players who have pitched in the game (including position players)
+function extractAllPitchersFromGame(teamData: any, players: any, isAway: boolean): any[] {
+	const allPitchers: any[] = [];
+
+	console.log(`Extracting pitchers for ${isAway ? 'away' : 'home'} team:`, {
+		teamDataKeys: Object.keys(teamData),
+		hasPitchers: !!teamData.pitchers,
+		pitchersCount: teamData.pitchers?.length || 0,
+		playersCount: Object.keys(players).length,
+	});
+
+	// First, get the official pitchers from the team data
+	if (teamData.pitchers && teamData.pitchers.length > 0) {
+		console.log('Official pitcher IDs found:', teamData.pitchers);
+
+		// Convert pitcher IDs to full player objects with stats
+		const pitcherObjects = teamData.pitchers
+			.map((pitcherId: any) => {
+				// pitcherId might be a string or number, convert to string for lookup
+				const idStr = String(pitcherId);
+				const playerIdWithPrefix = `ID${idStr}`;
+				// Look up from the teamData.players collection which has stats, not the basic players collection
+				const player = teamData.players[playerIdWithPrefix];
+				console.log(`Looking up pitcher ID ${pitcherId} as ${playerIdWithPrefix}:`, player ? 'Found' : 'Not found');
+				return player;
+			})
+			.filter(Boolean); // Remove any undefined players
+
+		console.log(
+			'Official pitchers found:',
+			pitcherObjects.map((p: any) => ({
+				name: p.person?.fullName,
+				hasStats: !!p.stats,
+				pitchingStats: p.stats?.pitching,
+			}))
+		);
+		const officialPitchers = extractPitcherStats(pitcherObjects);
+		allPitchers.push(...officialPitchers);
+	}
+
+	// Debug: Look at all players to see who has pitching stats
+	console.log('Checking all players for pitching stats...');
+	let playersWithPitchingStats = 0;
+	let playersWithAnyStats = 0;
+
+	Object.values(players).forEach((player: any) => {
+		if (player.stats) {
+			playersWithAnyStats++;
+			if (player.stats.pitching) {
+				playersWithPitchingStats++;
+				console.log(`Player with pitching stats: ${player.person?.fullName}`, {
+					inningsPitched: player.stats.pitching.inningsPitched,
+					pitchesThrown: player.stats.pitching.pitchesThrown,
+					statsKeys: Object.keys(player.stats),
+				});
+			}
+		}
+	});
+
+	console.log(
+		`Found ${playersWithPitchingStats} players with pitching stats out of ${playersWithAnyStats} players with any stats`
+	);
+
+	// Then, look through all players to find any who have pitching stats
+	// This includes position players who may have pitched
+	Object.values(teamData.players || {}).forEach((player: any) => {
+		// Check if this player has pitching statistics
+		if (
+			player.stats &&
+			player.stats.pitching &&
+			(player.stats.pitching.inningsPitched > 0 || player.stats.pitching.pitchesThrown > 0)
+		) {
+			// Check if this player belongs to the current team
+			// We can determine this by checking if they appear in the team's batters or pitchers
+			const isPlayerOnTeam =
+				(teamData.batters && teamData.batters.some((batter: any) => batter.person?.id === player.person?.id)) ||
+				(teamData.pitchers && teamData.pitchers.some((pitcher: any) => pitcher.person?.id === player.person?.id));
+
+			if (isPlayerOnTeam) {
+				// Check if we haven't already added this player
+				const alreadyAdded = allPitchers.some((pitcher) => pitcher.name === player.person?.fullName);
+
+				if (!alreadyAdded) {
+					const pitcherStats = extractPitcherStats([player]);
+					allPitchers.push(...pitcherStats);
+				}
+			}
+		}
+	});
+
+	// Sort pitchers by innings pitched (descending) to show starters first
+	const sortedPitchers = allPitchers.sort((a, b) => (b.innings_pitched || 0) - (a.innings_pitched || 0));
+
+	console.log(
+		`Final pitchers for ${isAway ? 'away' : 'home'} team:`,
+		sortedPitchers.map((p) => ({
+			name: p.name,
+			innings: p.innings_pitched,
+			era: p.era,
+			number: p.number,
+		}))
+	);
+
+	return sortedPitchers;
 }
 
 // Helper functions to generate realistic fallback data when detailed game feed is not available
@@ -976,48 +1371,183 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 
 					console.log(`Game ${gameData.gamePk} - Processed innings from schedule API:`, inningList);
 				}
-				// Fallback to game feed API if schedule API doesn't have complete data
-				else {
-					try {
-						const gamePk = gameData.gamePk;
-						if (gamePk) {
-							const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
+				// Always fetch detailed game feed data for comprehensive player stats and play-by-play
+				try {
+					const gamePk = gameData.gamePk;
+					console.log(`Attempting to fetch game feed for game PK: ${gamePk}`);
 
-							const gameFeedData = await makeCachedRequest(
-								gameFeedCache,
-								gameFeedCacheKey,
-								async () => {
-									const gameFeedResponse = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`, {
-										headers: {
-											'User-Agent': 'Mozilla/5.0 (compatible; BaseballApp/1.0)',
-										},
-									});
+					if (gamePk) {
+						const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
 
-									if (!gameFeedResponse.ok) {
-										throw new Error(`Game feed not available for game ${gamePk}`);
-									}
+						const gameFeedData = await makeCachedRequest(
+							gameFeedCache,
+							gameFeedCacheKey,
+							async () => {
+								const gameFeedResponse = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`, {
+									headers: {
+										'User-Agent': 'Mozilla/5.0 (compatible; BaseballApp/1.0)',
+									},
+								});
 
-									return gameFeedResponse.json();
-								},
-								30 * 1000 // 30 seconds TTL for live game feeds
+								if (!gameFeedResponse.ok) {
+									throw new Error(`Game feed not available for game ${gamePk}`);
+								}
+
+								return gameFeedResponse.json();
+							},
+							30 * 1000 // 30 seconds TTL for live game feeds
+						);
+
+						// Extract comprehensive data from game feed
+						console.log('Game feed data structure:', {
+							hasLiveData: !!gameFeedData.liveData,
+							hasBoxscore: !!gameFeedData.liveData?.boxscore,
+							hasTeams: !!gameFeedData.liveData?.boxscore?.teams,
+							hasAwayTeam: !!gameFeedData.liveData?.boxscore?.teams?.away,
+							hasHomeTeam: !!gameFeedData.liveData?.boxscore?.teams?.home,
+							playersCount: Object.keys(gameFeedData.gameData?.players || {}).length,
+						});
+
+						// Debug the actual structure of team data
+						if (gameFeedData.liveData?.boxscore?.teams) {
+							const awayTeam = gameFeedData.liveData.boxscore.teams.away;
+							const homeTeam = gameFeedData.liveData.boxscore.teams.home;
+
+							console.log('Away team structure:', {
+								keys: Object.keys(awayTeam || {}),
+								hasBatters: !!awayTeam?.batters,
+								battersLength: awayTeam?.batters?.length || 0,
+								hasPitchers: !!awayTeam?.pitchers,
+								pitchersLength: awayTeam?.pitchers?.length || 0,
+								hasPlayers: !!awayTeam?.players,
+								playersLength: awayTeam?.players ? Object.keys(awayTeam.players).length : 0,
+								firstBatter: awayTeam?.batters?.[0]
+									? {
+											name: awayTeam.batters[0].person?.fullName,
+											hasStats: !!awayTeam.batters[0].stats,
+											statsKeys: awayTeam.batters[0].stats ? Object.keys(awayTeam.batters[0].stats) : [],
+									  }
+									: null,
+							});
+
+							console.log('Home team structure:', {
+								keys: Object.keys(homeTeam || {}),
+								hasBatters: !!homeTeam?.batters,
+								battersLength: homeTeam?.batters?.length || 0,
+								hasPitchers: !!homeTeam?.pitchers,
+								pitchersLength: homeTeam?.pitchers?.length || 0,
+								hasPlayers: !!homeTeam?.players,
+								playersLength: homeTeam?.players ? Object.keys(homeTeam.players).length : 0,
+							});
+						}
+
+						const linescore = gameFeedData.liveData?.linescore;
+						const boxscore = gameFeedData.liveData?.boxscore;
+						const allPlays = gameFeedData.liveData?.plays?.allPlays || [];
+						const players = gameFeedData.gameData?.players || {};
+
+						// Process inning data
+						if (linescore && linescore.innings) {
+							inningList = linescore.innings.map((inning: any) => ({
+								inning: inning.num,
+								away_runs: inning.away?.runs || 0,
+								home_runs: inning.home?.runs || 0,
+							}));
+						}
+
+						// Process player statistics
+						let playerStats: { away: { batters: any[]; pitchers: any[] }; home: { batters: any[]; pitchers: any[] } } =
+							{
+								away: { batters: [], pitchers: [] },
+								home: { batters: [], pitchers: [] },
+							};
+						if (boxscore && boxscore.teams) {
+							// Process substitution events from play-by-play
+							const substitutionEvents = allPlays.filter(
+								(play: any) =>
+									play.result?.eventType === 'Substitution' ||
+									play.result?.description?.includes('Pinch') ||
+									play.result?.description?.includes('Defensive Sub')
 							);
+							const substitutionData = processSubstitutionEvents(substitutionEvents);
 
-							// Extract inning data from game feed
-							const linescore = gameFeedData.liveData?.linescore;
-							if (linescore && linescore.innings) {
-								inningList = linescore.innings.map((inning: any) => ({
-									inning: inning.num,
-									away_runs: inning.away?.runs || 0,
-									home_runs: inning.home?.runs || 0,
-								}));
+							// Process away team stats
+							if (boxscore.teams.away && boxscore.teams.away.batters) {
+								const awayBatters = extractBatterStats(boxscore.teams.away.batters, substitutionData);
+								// Extract ALL players who have pitched (including position players who pitched)
+								const awayPitchers = extractAllPitchersFromGame(boxscore.teams.away, players, true);
+								playerStats.away = { batters: awayBatters, pitchers: awayPitchers };
+							}
+
+							// Process home team stats
+							if (boxscore.teams.home && boxscore.teams.home.batters) {
+								const homeBatters = extractBatterStats(boxscore.teams.home.batters, substitutionData);
+								// Extract ALL players who have pitched (including position players who pitched)
+								const homePitchers = extractAllPitchersFromGame(boxscore.teams.home, players, false);
+								playerStats.home = { batters: homeBatters, pitchers: homePitchers };
 							}
 						}
-					} catch (feedError) {
-						console.log(`Error fetching detailed data for game ${gameData.gamePk}:`, feedError);
-						// Game feed not available (likely scheduled game that hasn't started)
-						// This is normal for scheduled games
-						inningList = [];
+
+						// Process play-by-play data for at-bat results
+						const playByPlayData = processPlayByPlayData(allPlays, players);
+
+						console.log('Final player stats before return:', {
+							awayBatters: playerStats.away.batters.length,
+							awayPitchers: playerStats.away.pitchers.length,
+							homeBatters: playerStats.home.batters.length,
+							homePitchers: playerStats.home.pitchers.length,
+							awayPitcherNames: playerStats.away.pitchers.map((p) => p.name),
+							homePitcherNames: playerStats.home.pitchers.map((p) => p.name),
+						});
+
+						// Extract supplementary game information
+						const umpires = extractUmpires(gameFeedData);
+						const managers = extractManagers(gameFeedData);
+						const weather = extractWeather(gameFeedData);
+						const uniforms = extractUniforms(gameFeedData);
+						const startTime = extractStartTime(gameFeedData);
+						const endTime = extractEndTime(gameFeedData);
+						const wind = extractWind(gameFeedData);
+
+						// Store comprehensive data for return
+						return {
+							game_id: gameId,
+							game_data: {
+								away_team: {
+									name: awayTeamName,
+									abbreviation: awayCodeFromName,
+								},
+								home_team: {
+									name: homeTeamName,
+									abbreviation: homeCodeFromName,
+								},
+								game_date_str: date,
+								location: gameData.venue?.name || 'Stadium',
+								inning_list: inningList,
+								is_postponed: status.detailedState === 'Postponed',
+								is_suspended: status.detailedState === 'Suspended',
+								away_score: awayScore,
+								home_score: homeScore,
+								total_away_runs: awayScore,
+								total_home_runs: homeScore,
+								status: status.detailedState,
+								umpires: umpires,
+								managers: managers,
+								start_time: startTime,
+								end_time: endTime,
+								weather: weather,
+								wind: wind,
+								uniforms: uniforms,
+								player_stats: playerStats,
+								play_by_play: playByPlayData,
+							},
+							svg_content: generateDetailedSVGFromSchedule(gameData, awayCodeFromName, homeCodeFromName, inningList),
+							success: true,
+						};
 					}
+				} catch (feedError) {
+					console.log(`Error fetching detailed data for game ${gameData.gamePk}:`, feedError);
+					// Continue with basic data if detailed feed fails
 				}
 
 				// Return the game data

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { GameData } from '@/types';
 import LoadingSpinner from './LoadingSpinner';
 import * as TeamLogos from './team-logos';
+import { getGameDetails } from '@/lib/baseball-service';
 
 interface TraditionalScorecardProps {
 	gameData: GameData;
@@ -345,6 +346,17 @@ const processBatterData = (
 					initial_position: initialPosition,
 					final_position: finalPosition,
 					position_changes: [],
+					// Add stats for substitute players
+					at_bats: sub.stats?.batting?.atBats || sub.at_bats || 0,
+					hits: sub.stats?.batting?.hits || sub.hits || 0,
+					runs: sub.stats?.batting?.runs || sub.runs || 0,
+					rbi: sub.stats?.batting?.rbi || sub.rbis || 0,
+					walks: sub.walks || 0,
+					strikeouts: sub.strikeouts || 0,
+					// Add slash line data for substitute players
+					average: sub.average,
+					onBasePercentage: sub.onBasePercentage,
+					sluggingPercentage: sub.sluggingPercentage,
 				});
 
 				// Update previous sub for next iteration
@@ -381,8 +393,8 @@ const processBatterData = (
 				hits: starter.stats?.batting?.hits || starter.hits || 0,
 				runs: starter.stats?.batting?.runs || starter.runs || 0,
 				rbi: starter.stats?.batting?.rbi || starter.rbis || 0,
-				walks: 0, // Not available in current data structure
-				strikeouts: 0, // Not available in current data structure
+				walks: starter.walks || 0,
+				strikeouts: starter.strikeouts || 0,
 				number: starter.jerseyNumber
 					? String(starter.jerseyNumber)
 					: starter.jersey_number
@@ -394,6 +406,12 @@ const processBatterData = (
 				// Add starter position tracking
 				starter_initial_position: starterInitialPosition,
 				starter_final_position: starterFinalPosition,
+				// Add team information
+				isAway: isAway,
+				// Add slash line data
+				average: starter.average,
+				onBasePercentage: starter.onBasePercentage,
+				sluggingPercentage: starter.sluggingPercentage,
 			});
 		} else {
 			// Empty slot
@@ -471,6 +489,37 @@ const getFootnoteNumber = (footnote: string): string => {
 	return Math.abs((hash % 9) + 1).toString();
 };
 
+// Helper function to get at-bat results for a specific inning and batter
+const getAtBatResultsForInning = (
+	batter: BatterData,
+	inningNumber: number,
+	detailedData: DetailedGameData | null
+): Array<{ atBatResult: string; endedInning: boolean }> => {
+	if (!detailedData || !detailedData.play_by_play) {
+		return [];
+	}
+
+	const playByPlay = detailedData.play_by_play;
+	const atBatResults: Array<{ atBatResult: string; endedInning: boolean }> = [];
+
+	// Get at-bats for this batter in this inning
+	const batterName = batter.name;
+	const halfInning = batter.isAway ? 'top' : 'bottom';
+	const atBatKey = `${batterName}-${inningNumber}-${halfInning}`;
+
+	if (playByPlay.atBats && playByPlay.atBats.has(atBatKey)) {
+		const atBats = playByPlay.atBats.get(atBatKey) || [];
+		atBats.forEach((atBat) => {
+			atBatResults.push({
+				atBatResult: atBat.atBatResult || '',
+				endedInning: atBat.outs >= 3 || atBat.endedInning,
+			});
+		});
+	}
+
+	return atBatResults;
+};
+
 // Component for rendering batter rows with substitutions
 const BatterRow = ({
 	batter,
@@ -478,12 +527,14 @@ const BatterRow = ({
 	displayInnings,
 	isAway = true,
 	isLastRow = false,
+	detailedData,
 }: {
 	batter: BatterData;
 	index: number;
 	displayInnings: number;
 	isAway?: boolean;
 	isLastRow?: boolean;
+	detailedData: DetailedGameData | null;
 }) => {
 	return (
 		<div
@@ -508,31 +559,56 @@ const BatterRow = ({
 
 			{/* Player Name */}
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-800 h-18">
-				<div className="flex items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
-					<span className="font-medium text-2xs text-primary-900 dark:text-primary-100">{batter.name}</span>
-				</div>
-				<div className="flex items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
-					{batter.substitutions?.[0] && (
-						<span className="font-medium text-2xs text-primary-900 dark:text-primary-100">
-							{batter.substitutions[0].player_name}
-							{batter.substitutions[0].footnote && (
-								<sup className="text-[7px] text-primary-600 dark:text-primary-400">
-									{getFootnoteNumber(batter.substitutions[0].footnote)}
-								</sup>
-							)}
+				<div className="flex flex-col px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+					<span className="font-bold text-2xs text-primary-900 dark:text-primary-100">{batter.name}</span>
+					{batter.average && batter.onBasePercentage && batter.sluggingPercentage && (
+						<span className="text-[8px] text-primary-600 dark:text-primary-400">
+							{batter.average}/{batter.onBasePercentage}/{batter.sluggingPercentage}
 						</span>
 					)}
 				</div>
-				<div className="flex items-center px-2 h-6 bg-primary-50 dark:bg-primary-800">
+				<div className="flex flex-col px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+					{batter.substitutions?.[0] && (
+						<>
+							<span className="font-bold text-2xs text-primary-900 dark:text-primary-100">
+								{batter.substitutions[0].player_name}
+								{batter.substitutions[0].footnote && (
+									<sup className="text-[7px] text-primary-600 dark:text-primary-400">
+										{getFootnoteNumber(batter.substitutions[0].footnote)}
+									</sup>
+								)}
+							</span>
+							{batter.substitutions[0].average &&
+								batter.substitutions[0].onBasePercentage &&
+								batter.substitutions[0].sluggingPercentage && (
+									<span className="text-[8px] text-primary-600 dark:text-primary-400">
+										{batter.substitutions[0].average}/{batter.substitutions[0].onBasePercentage}/
+										{batter.substitutions[0].sluggingPercentage}
+									</span>
+								)}
+						</>
+					)}
+				</div>
+				<div className="flex flex-col px-2 h-6 bg-primary-50 dark:bg-primary-800">
 					{batter.substitutions?.[1] && (
-						<span className="font-medium text-2xs text-primary-900 dark:text-primary-100">
-							{batter.substitutions[1].player_name}
-							{batter.substitutions[1].footnote && (
-								<sup className="text-[7px] text-primary-600 dark:text-primary-400">
-									{getFootnoteNumber(batter.substitutions[1].footnote)}
-								</sup>
-							)}
-						</span>
+						<>
+							<span className="font-bold text-2xs text-primary-900 dark:text-primary-100">
+								{batter.substitutions[1].player_name}
+								{batter.substitutions[1].footnote && (
+									<sup className="text-[7px] text-primary-600 dark:text-primary-400">
+										{getFootnoteNumber(batter.substitutions[1].footnote)}
+									</sup>
+								)}
+							</span>
+							{batter.substitutions[1].average &&
+								batter.substitutions[1].onBasePercentage &&
+								batter.substitutions[1].sluggingPercentage && (
+									<span className="text-[8px] text-primary-600 dark:text-primary-400">
+										{batter.substitutions[1].average}/{batter.substitutions[1].onBasePercentage}/
+										{batter.substitutions[1].sluggingPercentage}
+									</span>
+								)}
+						</>
 					)}
 				</div>
 			</div>
@@ -629,6 +705,9 @@ const BatterRow = ({
 				const substitutionType = batter.substitutions?.[0]?.substitution_type;
 				const isLastInning = i === displayInnings - 1;
 
+				// Get at-bat results for this inning
+				const atBatResults = getAtBatResultsForInning(batter, inningNumber, detailedData);
+
 				// Determine border styling based on substitution type
 				let borderClass = isLastInning
 					? 'border-primary-200 dark:border-primary-700'
@@ -645,9 +724,27 @@ const BatterRow = ({
 					}
 				}
 
+				// Add bottom border if this was the last at-bat of the inning
+				if (atBatResults.some((result) => result.endedInning)) {
+					borderClass += ' border-b-2 border-b-primary-900';
+				}
+
 				return (
-					<div key={i} className={`flex justify-center items-center h-fill w-fill ${borderClass}`}>
-						{/* Square cell for at-bat results */}
+					<div key={i} className={`flex flex-col justify-center items-center h-fill w-fill ${borderClass}`}>
+						{/* Display at-bat results */}
+						{atBatResults.map((result, resultIndex) => (
+							<div key={resultIndex} className="flex justify-center items-center w-full h-full">
+								<span className="font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
+									{result.atBatResult}
+								</span>
+							</div>
+						))}
+						{/* Show empty cell if no at-bats */}
+						{atBatResults.length === 0 && (
+							<div className="flex justify-center items-center w-full h-full">
+								<span className="text-2xs text-primary-400 dark:text-primary-600"></span>
+							</div>
+						)}
 					</div>
 				);
 			})}
@@ -657,66 +754,66 @@ const BatterRow = ({
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.at_bats || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{/* Second row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+					{batter.substitutions?.[0]?.at_bats || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{/* Third row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
+					{batter.substitutions?.[1]?.at_bats || 0}
 				</div>
 			</div>
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.hits || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{/* Second row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+					{batter.substitutions?.[0]?.hits || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{/* Third row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
+					{batter.substitutions?.[1]?.hits || 0}
 				</div>
 			</div>
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.runs || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{/* Second row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+					{batter.substitutions?.[0]?.runs || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{/* Third row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
+					{batter.substitutions?.[1]?.runs || 0}
 				</div>
 			</div>
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.rbi || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{/* Second row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+					{batter.substitutions?.[0]?.rbi || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{/* Third row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
+					{batter.substitutions?.[1]?.rbi || 0}
 				</div>
 			</div>
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.walks || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{/* Second row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+					{batter.substitutions?.[0]?.walks || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{/* Third row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
+					{batter.substitutions?.[1]?.walks || 0}
 				</div>
 			</div>
 			<div className="flex flex-col h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.strikeouts || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{/* Second row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+					{batter.substitutions?.[0]?.strikeouts || 0}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{/* Third row content */}
+				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
+					{batter.substitutions?.[1]?.strikeouts || 0}
 				</div>
 			</div>
 		</div>
@@ -766,6 +863,12 @@ interface DetailedGameData {
 	};
 	total_away_runs?: number;
 	total_home_runs?: number;
+	// Play-by-play data
+	play_by_play?: {
+		atBats: Map<string, any[]>;
+		substitutions: Map<string, any[]>;
+		inningResults: Map<string, any[]>;
+	};
 }
 
 interface InningData {
@@ -812,6 +915,12 @@ interface BatterData {
 	// Starter position tracking
 	starter_initial_position?: string;
 	starter_final_position?: string;
+	// Team information
+	isAway?: boolean;
+	// Slash line data
+	average?: string;
+	onBasePercentage?: string;
+	sluggingPercentage?: string;
 }
 
 interface SubstitutionData {
@@ -832,6 +941,17 @@ interface SubstitutionData {
 		from_position: string;
 		to_position: string;
 	}>;
+	// Stats for substitute players
+	at_bats?: number;
+	hits?: number;
+	runs?: number;
+	rbi?: number;
+	walks?: number;
+	strikeouts?: number;
+	// Slash line data for substitute players
+	average?: string;
+	onBasePercentage?: string;
+	sluggingPercentage?: string;
 }
 
 interface PitcherData {
@@ -904,15 +1024,18 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 	const fetchDetailedData = useCallback(async () => {
 		setLoading(true);
 		try {
-			// Transform the GameData that's already available to DetailedGameData format
+			// Fetch detailed game data from the MLB API
+			const detailedGameData = await getGameDetails(gameId);
+
+			// Transform the detailed GameData to DetailedGameData format
 			const transformedData: DetailedGameData = {
-				game_id: gameData.game_id,
-				date: gameData.game_data.game_date_str,
-				away_team: gameData.game_data.away_team,
-				home_team: gameData.game_data.home_team,
-				venue: gameData.game_data.location,
-				status: gameData.game_data.status || 'Unknown',
-				innings: gameData.game_data.inning_list.map((inning: any) => ({
+				game_id: detailedGameData.game_id,
+				date: detailedGameData.game_data.game_date_str,
+				away_team: detailedGameData.game_data.away_team,
+				home_team: detailedGameData.game_data.home_team,
+				venue: detailedGameData.game_data.location,
+				status: detailedGameData.game_data.status || 'Unknown',
+				innings: detailedGameData.game_data.inning_list.map((inning: any) => ({
 					inning: inning.inning,
 					away_runs: inning.away || 0,
 					home_runs: inning.home || 0,
@@ -922,22 +1045,95 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 				})),
 				batters: {
 					away: processBatterData(
-						gameData.game_data.player_stats?.away?.batters || [],
-						gameData.game_data.player_stats?.away?.pitchers || [],
+						detailedGameData.game_data.player_stats?.away?.batters || [],
+						detailedGameData.game_data.player_stats?.away?.pitchers || [],
 						true,
-						gameData.game_data.player_stats?.away?.batters || []
+						detailedGameData.game_data.player_stats?.away?.batters || []
 					),
 					home: processBatterData(
-						gameData.game_data.player_stats?.home?.batters || [],
-						gameData.game_data.player_stats?.home?.pitchers || [],
+						detailedGameData.game_data.player_stats?.home?.batters || [],
+						detailedGameData.game_data.player_stats?.home?.pitchers || [],
 						false,
-						gameData.game_data.player_stats?.home?.batters || []
+						detailedGameData.game_data.player_stats?.home?.batters || []
 					),
 				},
-				pitchers:
-					gameData.game_data.player_stats?.away?.pitchers && gameData.game_data.player_stats?.home?.pitchers
+				pitchers: (() => {
+					console.log('Processing pitcher data:', {
+						hasAwayPitchers: !!detailedGameData.game_data.player_stats?.away?.pitchers,
+						awayPitchersCount: detailedGameData.game_data.player_stats?.away?.pitchers?.length || 0,
+						hasHomePitchers: !!detailedGameData.game_data.player_stats?.home?.pitchers,
+						homePitchersCount: detailedGameData.game_data.player_stats?.home?.pitchers?.length || 0,
+						playerStats: detailedGameData.game_data.player_stats,
+					});
+
+					// Debug: Log the actual pitcher data we're receiving
+					if (detailedGameData.game_data.player_stats?.away?.pitchers) {
+						console.log(
+							'Away pitchers raw data (full objects):',
+							detailedGameData.game_data.player_stats.away.pitchers
+						);
+						console.log(
+							'Away pitchers summary:',
+							detailedGameData.game_data.player_stats.away.pitchers.map((p) => ({
+								name: p.name,
+								innings_pitched: p.innings_pitched,
+								era: p.era,
+								number: (p as any).jersey_number || (p as any).number || '0',
+								allKeys: Object.keys(p),
+							}))
+						);
+
+						// Log the first pitcher object in detail
+						if (detailedGameData.game_data.player_stats.away.pitchers.length > 0) {
+							console.log('First away pitcher object:', detailedGameData.game_data.player_stats.away.pitchers[0]);
+						}
+					}
+
+					if (detailedGameData.game_data.player_stats?.home?.pitchers) {
+						console.log(
+							'Home pitchers raw data (full objects):',
+							detailedGameData.game_data.player_stats.home.pitchers
+						);
+						console.log(
+							'Home pitchers summary:',
+							detailedGameData.game_data.player_stats.home.pitchers.map((p) => ({
+								name: p.name,
+								innings_pitched: p.innings_pitched,
+								era: p.era,
+								number: (p as any).jersey_number || (p as any).number || '0',
+								allKeys: Object.keys(p),
+							}))
+						);
+
+						// Log the first pitcher object in detail
+						if (detailedGameData.game_data.player_stats.home.pitchers.length > 0) {
+							console.log('First home pitcher object:', detailedGameData.game_data.player_stats.home.pitchers[0]);
+						}
+					}
+
+					// Debug: Check if we have valid pitcher data
+					const hasValidAwayPitchers =
+						detailedGameData.game_data.player_stats?.away?.pitchers &&
+						detailedGameData.game_data.player_stats.away.pitchers.length > 0 &&
+						detailedGameData.game_data.player_stats.away.pitchers.some((p) => p.name && p.name !== 'Unknown Pitcher');
+
+					const hasValidHomePitchers =
+						detailedGameData.game_data.player_stats?.home?.pitchers &&
+						detailedGameData.game_data.player_stats.home.pitchers.length > 0 &&
+						detailedGameData.game_data.player_stats.home.pitchers.some((p) => p.name && p.name !== 'Unknown Pitcher');
+
+					console.log('Pitcher validation:', {
+						hasAwayPitchers: !!detailedGameData.game_data.player_stats?.away?.pitchers,
+						awayPitchersLength: detailedGameData.game_data.player_stats?.away?.pitchers?.length,
+						hasValidAwayPitchers,
+						hasHomePitchers: !!detailedGameData.game_data.player_stats?.home?.pitchers,
+						homePitchersLength: detailedGameData.game_data.player_stats?.home?.pitchers?.length,
+						hasValidHomePitchers,
+					});
+
+					return hasValidAwayPitchers && hasValidHomePitchers
 						? {
-								away: gameData.game_data.player_stats.away.pitchers.map((pitcher: any) => {
+								away: (detailedGameData.game_data.player_stats?.away?.pitchers || []).map((pitcher: any) => {
 									const innings = pitcher.innings_pitched || 0;
 									const earnedRuns = pitcher.earned_runs || 0;
 									const hits = pitcher.hits || 0;
@@ -973,7 +1169,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 										whip: Math.round(whip * 100) / 100, // Round to 2 decimal places
 									};
 								}),
-								home: gameData.game_data.player_stats.home.pitchers.map((pitcher: any) => {
+								home: (detailedGameData.game_data.player_stats?.home?.pitchers || []).map((pitcher: any) => {
 									const innings = pitcher.innings_pitched || 0;
 									const earnedRuns = pitcher.earned_runs || 0;
 									const hits = pitcher.hits || 0;
@@ -1010,7 +1206,8 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 									};
 								}),
 						  }
-						: { away: [], home: [] },
+						: { away: [], home: [] };
+				})(),
 				events: [],
 				umpires: gameData.game_data.umpires || [],
 				managers: gameData.game_data.managers || { away: 'Manager A', home: 'Manager B' },
@@ -1037,6 +1234,8 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 	}, [gameData]);
 
 	const renderPitcherTable = useCallback((pitchers: PitcherData[], teamName: string) => {
+		console.log(`Rendering pitcher table for ${teamName}:`, pitchers);
+
 		// Always show minimum 4 rows, but show as many as needed for actual pitchers
 		const minRows = 4;
 		const displayPitchers = [...pitchers];
@@ -1129,10 +1328,15 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 							</div>
 
 							{/* Pitcher Name */}
-							<div className="flex items-center px-2 h-8 border-r border-primary-200 dark:border-primary-700 bg-primary-50 dark:bg-primary-800">
-								<span className="font-medium truncate text-2xs text-primary-900 dark:text-primary-100">
-									{pitcher.name ? `${pitcher.name} (${pitcher.era?.toFixed(2) || '0.00'})` : ''}
+							<div className="flex justify-between items-center px-2 h-8 border-r border-primary-200 dark:border-primary-700 bg-primary-50 dark:bg-primary-800">
+								<span className="flex-1 min-w-0 font-medium truncate text-2xs text-primary-900 dark:text-primary-100">
+									{pitcher.name || ''}
 								</span>
+								{pitcher.name && (
+									<span className="flex-shrink-0 ml-2 font-normal text-2xs text-primary-600 dark:text-primary-400">
+										{pitcher.era?.toFixed(2) || '0.00'}
+									</span>
+								)}
 							</div>
 
 							{/* Handedness */}
@@ -1185,7 +1389,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 							</div>
 
 							{/* WLS */}
-							<div className="flex justify-center items-center h-8 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
 								{pitcher.name ? pitcher.wls || '' : ''}
 							</div>
 						</div>
@@ -1431,6 +1635,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 							displayInnings={displayInnings}
 							isAway={true}
 							isLastRow={index === detailedData.batters.away.length - 1}
+							detailedData={detailedData}
 						/>
 					))}
 
@@ -1670,6 +1875,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 							displayInnings={displayInnings}
 							isAway={false}
 							isLastRow={index === detailedData.batters.home.length - 1}
+							detailedData={detailedData}
 						/>
 					))}
 
