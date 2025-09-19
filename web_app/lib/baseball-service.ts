@@ -1392,7 +1392,7 @@ function generateFallbackInnings(
 	homeScore: number,
 	gameStatus: string
 ): Array<{ inning: number; away_runs: number; home_runs: number }> {
-	const innings = [];
+	const innings: Array<{ inning: number; away_runs: number; home_runs: number }> = [];
 	const totalInnings = gameStatus === 'Final' ? 9 : 9; // Assume 9 innings for completed games
 
 	// Initialize all innings with 0 runs
@@ -1801,7 +1801,7 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 							);
 
 							// Fill in missing innings with zeros up to 9 innings
-							const filledInnings = [];
+							const filledInnings: Array<{ inning: number; away_runs: number; home_runs: number }> = [];
 							for (let i = 1; i <= 9; i++) {
 								const existingInning = innings.find((inning) => inning.inning === i);
 								if (existingInning) {
@@ -2187,7 +2187,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 										);
 
 										// Look for substitution events in inning-by-inning data using API spec
-										const allInningEvents = [];
+										const allInningEvents: any[] = [];
 										Object.values(gameFeedData.liveData.plays.playsByInning).forEach((inning: any) => {
 											if (inning.top) allInningEvents.push(...inning.top);
 											if (inning.bottom) allInningEvents.push(...inning.bottom);
