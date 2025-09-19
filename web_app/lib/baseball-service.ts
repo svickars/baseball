@@ -2127,7 +2127,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 
 							// Debug: Show all unique event types in allPlays
 							const eventTypes = allPlays.map((play: any) => play.result?.eventType).filter(Boolean);
-							const uniqueEventTypes = [...new Set(eventTypes)];
+							const uniqueEventTypes = Array.from(new Set(eventTypes));
 							console.log('DEBUG: All unique event types in allPlays:', uniqueEventTypes);
 
 							// Debug: Check if there are other event types in the game feed
