@@ -2140,7 +2140,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 									if (gameFeedData.liveData.plays.allPlays) {
 										const allEvents = gameFeedData.liveData.plays.allPlays;
 										const allEventTypes = allEvents.map((play: any) => play.result?.eventType).filter(Boolean);
-										const allUniqueEventTypes = [...new Set(allEventTypes)];
+										const allUniqueEventTypes = Array.from(new Set(allEventTypes));
 										console.log('DEBUG: All event types in liveData.plays.allPlays:', allUniqueEventTypes);
 									}
 									// Check for substitution events in other play sections
