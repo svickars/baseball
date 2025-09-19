@@ -181,10 +181,35 @@ async function makeCachedRequest<T>(cache: APICache, key: string, fetchFn: () =>
 
 // Helper function to extract batter statistics from MLB API data
 function extractBatterStats(
-	batters: any[],
+	batterIds: any[],
+	players: any,
 	substitutionData?: Map<string, { type: string; inning: number; halfInning: string }>
 ): any[] {
-	const result = batters
+	console.log(`Extracting batters with ${batterIds.length} batter IDs:`, batterIds);
+
+	// Convert batter IDs to full player objects with stats
+	const batterObjects = batterIds
+		.map((batterId: any) => {
+			// batterId might be a string or number, convert to string for lookup
+			const idStr = String(batterId);
+			const playerIdWithPrefix = `ID${idStr}`;
+			// Look up from the players collection which has stats, not the basic players collection
+			const player = players[playerIdWithPrefix];
+			console.log(`Looking up batter ID ${batterId} as ${playerIdWithPrefix}:`, player ? 'Found' : 'Not found');
+			return player;
+		})
+		.filter(Boolean); // Remove any undefined players
+
+	console.log(
+		'Batters found:',
+		batterObjects.map((p: any) => ({
+			name: p.person?.fullName,
+			hasStats: !!p.stats,
+			battingStats: p.stats?.batting,
+		}))
+	);
+
+	const result = batterObjects
 		.filter((batter: any) => {
 			// Filter out pitchers - only include actual batters
 			const position = batter.position?.abbreviation || '';
@@ -309,15 +334,15 @@ function processPlayByPlayData(allPlays: any[], players: any): any {
 		inningResults: new Map<string, any[]>(),
 	};
 
-	allPlays.forEach((play: any) => {
+	allPlays.forEach((play: any, index: number) => {
 		const inning = play.about?.inning || 0;
 		const halfInning = play.about?.halfInning || 'top';
 		const batterId = play.matchup?.batter?.id;
 		const pitcherId = play.matchup?.pitcher?.id;
 
 		if (batterId && pitcherId) {
-			const batter = players[batterId];
-			const pitcher = players[pitcherId];
+			const batter = players[`ID${batterId}`];
+			const pitcher = players[`ID${pitcherId}`];
 
 			if (batter && pitcher) {
 				const atBatKey = `${batter.person?.fullName || 'Unknown'}-${inning}-${halfInning}`;
@@ -355,6 +380,69 @@ function processPlayByPlayData(allPlays: any[], players: any): any {
 	return playByPlayData;
 }
 
+// Helper function to map position names to numbers
+function mapPositionNameToNumber(positionName: string): string {
+	const positionMap: { [key: string]: string } = {
+		pitcher: '1',
+		p: '1',
+		catcher: '2',
+		c: '2',
+		'first baseman': '3',
+		'first base': '3',
+		first: '3',
+		'1b': '3',
+		'second baseman': '4',
+		'second base': '4',
+		second: '4',
+		'2b': '4',
+		'third baseman': '5',
+		'third base': '5',
+		third: '5',
+		'3b': '5',
+		shortstop: '6',
+		short: '6',
+		'short stop': '6',
+		ss: '6',
+		'left fielder': '7',
+		'left field': '7',
+		left: '7',
+		lf: '7',
+		'center fielder': '8',
+		'center field': '8',
+		center: '8',
+		centerfield: '8',
+		cf: '8',
+		'right fielder': '9',
+		'right field': '9',
+		right: '9',
+		rf: '9',
+		'designated hitter': '10',
+		dh: '10',
+	};
+
+	// Handle variations and abbreviations
+	const normalized = positionName.toLowerCase().replace(/s$/, ''); // Remove plural 's'
+
+	// Try exact match first
+	if (positionMap[positionName.toLowerCase()]) {
+		return positionMap[positionName.toLowerCase()];
+	}
+
+	// Try normalized match
+	if (positionMap[normalized]) {
+		return positionMap[normalized];
+	}
+
+	// Try partial matches for compound names
+	for (const [key, value] of Object.entries(positionMap)) {
+		if (normalized.includes(key) || key.includes(normalized)) {
+			return value;
+		}
+	}
+
+	return '';
+}
+
 // Helper function to map MLB API at-bat results to scorecard abbreviations
 function mapAtBatResult(event: string, description: string): string {
 	if (!event) return '';
@@ -382,21 +470,192 @@ function mapAtBatResult(event: string, description: string): string {
 	// Hit by pitch
 	if (eventLower.includes('hit by pitch')) return 'HBP';
 
-	// Outs
-	if (eventLower.includes('groundout') || eventLower.includes('ground out')) return 'G';
-	if (eventLower.includes('flyout') || eventLower.includes('fly out')) return 'F';
-	if (eventLower.includes('lineout') || eventLower.includes('line out')) return 'L';
-	if (eventLower.includes('popout') || eventLower.includes('pop out')) return 'P';
+	// Double plays - handle these before regular groundouts
+	if (descLower.includes('double play') || descLower.includes('grounded into double play')) {
+		// Look for positions involved in the double play
+		const positions: string[] = [];
+
+		// Try to extract positions from the description
+		// Common patterns: "6-4-3 double play", "4-6-3 double play", etc.
+		const positionMatch = descLower.match(/(\d+)-(\d+)(?:-(\d+))?/);
+		if (positionMatch) {
+			// Get the first two positions (most common for GXY notation)
+			positions.push(positionMatch[1], positionMatch[2]);
+			return `G${positions.join('')}`;
+		}
+
+		// Fallback: try to extract position names
+		const positionNames = ['shortstop', 'second baseman', 'first baseman', 'third baseman', 'pitcher', 'catcher'];
+		for (const posName of positionNames) {
+			if (descLower.includes(posName)) {
+				const posNum = mapPositionNameToNumber(posName);
+				if (posNum) positions.push(posNum);
+			}
+		}
+
+		if (positions.length >= 2) {
+			return `G${positions.slice(0, 2).join('')}`;
+		}
+
+		return 'GIDP'; // Fallback for double play
+	}
+
+	// Groundouts with position details
+	if (eventLower.includes('groundout') || eventLower.includes('ground out') || eventLower.includes('grounded out')) {
+		// Look for "to [position]" pattern for assisted outs
+		const toMatch = descLower.match(/to (\w+(?:\s+\w+)*)/);
+		if (toMatch) {
+			const position = toMatch[1];
+			const positionNum = mapPositionNameToNumber(position);
+			if (positionNum) {
+				return `G${positionNum}`;
+			}
+		}
+
+		// Look for "unassisted" pattern
+		if (descLower.includes('unassisted')) {
+			const unassistedMatch = descLower.match(/unassisted.*?(\w+(?:\s+\w+)*)/);
+			if (unassistedMatch) {
+				const position = unassistedMatch[1];
+				const positionNum = mapPositionNameToNumber(position);
+				if (positionNum) {
+					return `U${positionNum}`;
+				}
+			}
+		}
+
+		// Try to extract position numbers directly (e.g., "6-3", "4-3")
+		const positionNumMatch = descLower.match(/(\d+)-(\d+)/);
+		if (positionNumMatch) {
+			return `G${positionNumMatch[1]}`;
+		}
+
+		return 'G';
+	}
+
+	// Flyouts with position details
+	if (eventLower.includes('flyout') || eventLower.includes('fly out') || eventLower.includes('flied out')) {
+		// Look for "to [position]" pattern
+		const toMatch = descLower.match(/to (\w+(?:\s+\w+)*)/);
+		if (toMatch) {
+			const position = toMatch[1];
+			const positionNum = mapPositionNameToNumber(position);
+			if (positionNum) {
+				return `F${positionNum}`;
+			}
+		}
+
+		// Try to extract position numbers directly
+		const positionNumMatch = descLower.match(/(\d+)-(\d+)/);
+		if (positionNumMatch) {
+			return `F${positionNumMatch[1]}`;
+		}
+
+		return 'F';
+	}
+
+	// Lineouts with position details
+	if (eventLower.includes('lineout') || eventLower.includes('line out') || eventLower.includes('lined out')) {
+		const toMatch = descLower.match(/to (\w+(?:\s+\w+)*)/);
+		if (toMatch) {
+			const position = toMatch[1];
+			const positionNum = mapPositionNameToNumber(position);
+			if (positionNum) {
+				return `L${positionNum}`;
+			}
+		}
+
+		// Try to extract position numbers directly
+		const positionNumMatch = descLower.match(/(\d+)-(\d+)/);
+		if (positionNumMatch) {
+			return `L${positionNumMatch[1]}`;
+		}
+
+		return 'L';
+	}
+
+	// Popouts with position details
+	if (eventLower.includes('popout') || eventLower.includes('pop out') || eventLower.includes('popped out')) {
+		const toMatch = descLower.match(/to (\w+(?:\s+\w+)*)/);
+		if (toMatch) {
+			const position = toMatch[1];
+			const positionNum = mapPositionNameToNumber(position);
+			if (positionNum) {
+				return `P${positionNum}`;
+			}
+		}
+
+		// Try to extract position numbers directly
+		const positionNumMatch = descLower.match(/(\d+)-(\d+)/);
+		if (positionNumMatch) {
+			return `P${positionNumMatch[1]}`;
+		}
+
+		return 'P';
+	}
 
 	// Sacrifice
 	if (eventLower.includes('sacrifice fly')) return 'SF';
 	if (eventLower.includes('sacrifice bunt')) return 'SAC';
 
 	// Fielders choice
-	if (eventLower.includes('fielders choice')) return 'FC';
+	if (eventLower.includes('fielders choice') || eventLower.includes("fielder's choice")) {
+		// Try to get the position that made the play
+		const toMatch = descLower.match(/to (\w+(?:\s+\w+)*)/);
+		if (toMatch) {
+			const position = toMatch[1];
+			const positionNum = mapPositionNameToNumber(position);
+			if (positionNum) {
+				return `FC${positionNum}`;
+			}
+		}
+		return 'FC';
+	}
 
-	// Error
-	if (eventLower.includes('error')) return 'E';
+	// Error with specific fielder
+	if (eventLower.includes('error') || descLower.includes('error')) {
+		// Try to extract which fielder made the error
+		const positionNames = [
+			'shortstop',
+			'second baseman',
+			'first baseman',
+			'third baseman',
+			'pitcher',
+			'catcher',
+			'left fielder',
+			'center fielder',
+			'right fielder',
+		];
+		for (const posName of positionNames) {
+			if (descLower.includes(posName) && descLower.includes('error')) {
+				const posNum = mapPositionNameToNumber(posName);
+				if (posNum) {
+					return `E${posNum}`;
+				}
+			}
+		}
+
+		// Try to extract position numbers directly
+		const positionNumMatch = descLower.match(/(\d+)-(\d+)/);
+		if (positionNumMatch && descLower.includes('error')) {
+			return `E${positionNumMatch[1]}`;
+		}
+
+		return 'E';
+	}
+
+	// Force out
+	if (eventLower.includes('force out') || eventLower.includes('forced out')) {
+		const toMatch = descLower.match(/to (\w+(?:\s+\w+)*)/);
+		if (toMatch) {
+			const position = toMatch[1];
+			const positionNum = mapPositionNameToNumber(position);
+			if (positionNum) {
+				return `FO${positionNum}`;
+			}
+		}
+		return 'FO';
+	}
 
 	return event.substring(0, 3).toUpperCase();
 }
@@ -487,13 +746,381 @@ function extractWind(gameFeedData: any): string | null {
 	return null;
 }
 
+// Helper function to derive substitution timing from boxscore data when play-by-play doesn't contain substitution events
+function deriveSubstitutionTimingFromBoxscore(
+	boxscore: any,
+	allPlays: any[]
+): Map<string, { type: string; inning: number; halfInning: string }> {
+	console.log('DEBUG: deriveSubstitutionTimingFromBoxscore called');
+	const substitutionData = new Map<string, { type: string; inning: number; halfInning: string }>();
+
+	// Process both teams
+	const teams = [boxscore.teams.away, boxscore.teams.home];
+
+	teams.forEach((team: any, teamIndex: number) => {
+		const teamName = teamIndex === 0 ? 'away' : 'home';
+		console.log(`DEBUG: Processing ${teamName} team for substitutions`);
+
+		// Check all batters for substitution indicators
+		console.log(`DEBUG: Processing ${team.batters.length} batters for ${teamName} team:`, team.batters);
+
+		// Look for specific players we're trying to debug
+		const targetPlayers = ['Ty France', 'Isiah Kiner-Falefa', 'Nick Fortes'];
+		console.log(`DEBUG: Looking for target players in ${teamName} team:`, targetPlayers);
+
+		team.batters.forEach((batterId: any) => {
+			const player = team.players[`ID${batterId}`];
+			if (!player) {
+				console.log(`DEBUG: No player found for batter ID ${batterId}`);
+				return;
+			}
+
+			const playerName = player.person?.fullName;
+			const playerId = player.person?.id;
+			if (!playerName || !playerId) {
+				console.log(`DEBUG: Missing name or ID for player ${batterId}: name=${playerName}, id=${playerId}`);
+				return;
+			}
+
+			// Check if this is one of our target players
+			if (targetPlayers.includes(playerName)) {
+				console.log(`DEBUG: FOUND TARGET PLAYER ${playerName} in ${teamName} team!`);
+			}
+
+			// Check if player has multiple positions (indicates substitution)
+			const allPositions = player.allPositions || [];
+
+			// Debug: Log all players to see their positions and starter status
+			console.log(`DEBUG: Player ${playerName}:`, {
+				allPositions: allPositions.length,
+				positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
+				isStarter: player.gameStatus?.isStarter,
+				gameStatus: player.gameStatus,
+				hasStats: !!player.stats,
+				battingStats: player.stats?.batting,
+			});
+
+			// Special debug for the players we're looking for
+			if (
+				playerName.includes('Ty France') ||
+				playerName.includes('Isiah Kiner-Falefa') ||
+				playerName.includes('Nick Fortes')
+			) {
+				console.log(`DEBUG: FOUND TARGET PLAYER ${playerName}:`, {
+					batterId,
+					allPositions: allPositions.length,
+					positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
+					isStarter: player.gameStatus?.isStarter,
+					gameStatus: player.gameStatus,
+					hasStats: !!player.stats,
+					battingStats: player.stats?.batting,
+				});
+			}
+
+			// Check if player is a substitution using multiple criteria:
+			// 1. Multiple positions (position change)
+			// 2. Has batting stats but is not a starter (pinch hitter)
+			// 3. Has stats but isStarter is false/undefined (substitute)
+			const hasMultiplePositions = allPositions.length > 1;
+			const isStarter = player.gameStatus?.isStarter || false;
+			const hasBattingStats =
+				player.stats?.batting &&
+				(player.stats.batting.atBats > 0 ||
+					player.stats.batting.hits > 0 ||
+					player.stats.batting.runs > 0 ||
+					player.stats.batting.rbi > 0);
+
+			// Player is a substitution if:
+			// - Has multiple positions AND is not a starter, OR
+			// - Has batting stats AND is not a starter (pinch hitter), OR
+			// - Has any stats AND isStarter is false/undefined (general substitute)
+			const isSubstitution =
+				(hasMultiplePositions && !isStarter) || (hasBattingStats && !isStarter) || (player.stats && !isStarter);
+
+			if (!isSubstitution) {
+				console.log(`DEBUG: Skipping ${playerName} - not detected as substitution:`, {
+					hasMultiplePositions,
+					isStarter,
+					hasBattingStats,
+					hasStats: !!player.stats,
+				});
+				return;
+			}
+
+			if (hasMultiplePositions) {
+				// Check if this is a starter who changed positions during the game
+				if (isStarter) {
+					console.log(`DEBUG: Found starter with position change: ${playerName} (ID: ${playerId})`, {
+						positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
+						gameStatus: player.gameStatus,
+						stats: player.stats,
+					});
+
+					// This is a starter who changed positions - we'll handle this in the batter processing
+					// by tracking their initial and final positions
+					return;
+				}
+
+				console.log(`DEBUG: Found player with multiple positions: ${playerName} (ID: ${playerId})`, {
+					positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
+					gameStatus: player.gameStatus,
+					stats: player.stats,
+				});
+
+				// Determine substitution type based on positions and stats
+				let substitutionType = 'DEF'; // Default to defensive substitution
+
+				// Check if player has batting stats but started in a non-batting position
+				const battingStats = player.stats?.batting;
+				const hasBattingStats =
+					battingStats &&
+					(battingStats.atBats > 0 || battingStats.hits > 0 || battingStats.runs > 0 || battingStats.rbi > 0);
+
+				if (hasBattingStats) {
+					// Player has batting stats, likely a pinch hitter
+					substitutionType = 'PH';
+				} else {
+					// Check if this is a defensive substitution
+					const firstPosition = allPositions[0];
+					const lastPosition = allPositions[allPositions.length - 1];
+
+					if (firstPosition.code !== lastPosition.code) {
+						substitutionType = 'DEF';
+					}
+				}
+
+				// Try to determine inning from player's first appearance in play-by-play
+				let estimatedInning = 9; // Default fallback
+				let estimatedHalfInning = 'top';
+
+				// Look for player's first at-bat or appearance in play-by-play using player ID (most reliable)
+				for (let i = 0; i < allPlays.length; i++) {
+					const play = allPlays[i];
+					const players = play.players || [];
+
+					// Check if this player appears in this play using player ID (most reliable)
+					const playerInPlay = players.find((p: any) => {
+						const playPlayerId = p.person?.id || p.id;
+						return playPlayerId === playerId;
+					});
+
+					if (playerInPlay) {
+						const about = play.about;
+						if (about && about.inning) {
+							estimatedInning = about.inning;
+							estimatedHalfInning = about.halfInning || 'top';
+							console.log(
+								`DEBUG: Found ${playerName} (ID: ${playerId}) first appearance in inning ${estimatedInning} ${estimatedHalfInning}`
+							);
+							break;
+						}
+					}
+				}
+
+				// If still not found by ID, try name matching as fallback
+				if (estimatedInning === 9) {
+					console.log(`DEBUG: Player ${playerName} (ID: ${playerId}) not found by ID, trying name matching...`);
+					for (let i = 0; i < allPlays.length; i++) {
+						const play = allPlays[i];
+						const players = play.players || [];
+
+						// Check if this player appears in this play - try multiple name formats
+						const playerInPlay = players.find((p: any) => {
+							const playPlayerName = p.person?.fullName || p.name || '';
+							return (
+								playPlayerName === playerName ||
+								playPlayerName.includes(playerName.split(' ')[0]) ||
+								playPlayerName.includes(playerName.split(' ')[1])
+							);
+						});
+
+						if (playerInPlay) {
+							const about = play.about;
+							if (about && about.inning) {
+								estimatedInning = about.inning;
+								estimatedHalfInning = about.halfInning || 'top';
+								console.log(`DEBUG: Found ${playerName} by name in inning ${estimatedInning} ${estimatedHalfInning}`);
+								break;
+							}
+						}
+					}
+				}
+
+				// If still not found, try a different approach - look for the player in the play description
+				if (estimatedInning === 9) {
+					console.log(`DEBUG: Player ${playerName} not found in play players, checking descriptions...`);
+					for (let i = 0; i < allPlays.length; i++) {
+						const play = allPlays[i];
+						const description = play.result?.description || '';
+
+						// Check if player name appears in the play description
+						if (description.toLowerCase().includes(playerName.toLowerCase())) {
+							const about = play.about;
+							if (about && about.inning) {
+								estimatedInning = about.inning;
+								estimatedHalfInning = about.halfInning || 'top';
+								console.log(
+									`DEBUG: Found ${playerName} in description of inning ${estimatedInning} ${estimatedHalfInning}: "${description}"`
+								);
+								break;
+							}
+						}
+					}
+				}
+
+				// Store the substitution data
+				substitutionData.set(playerName, {
+					type: substitutionType,
+					inning: estimatedInning,
+					halfInning: estimatedHalfInning,
+				});
+
+				console.log(`DEBUG: Derived substitution for ${playerName}:`, {
+					type: substitutionType,
+					inning: estimatedInning,
+					halfInning: estimatedHalfInning,
+				});
+			} else {
+				// Player has single position but is still a substitution (detected by batting stats or other criteria)
+				console.log(`DEBUG: Found single-position substitution: ${playerName} (ID: ${playerId})`, {
+					positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
+					gameStatus: player.gameStatus,
+					stats: player.stats,
+					isStarter,
+					hasBattingStats,
+				});
+
+				// Determine substitution type based on stats
+				let substitutionType = 'DEF'; // Default to defensive substitution
+
+				if (hasBattingStats) {
+					// Player has batting stats, likely a pinch hitter
+					substitutionType = 'PH';
+				} else if (player.stats && !isStarter) {
+					// Player has stats but is not a starter, likely defensive replacement
+					substitutionType = 'DEF';
+				}
+
+				// Try to determine inning from player's first appearance in play-by-play
+				let estimatedInning = 9; // Default fallback
+				let estimatedHalfInning = 'top';
+
+				// Look for player's first at-bat or appearance in play-by-play using player ID (most reliable)
+				for (let i = 0; i < allPlays.length; i++) {
+					const play = allPlays[i];
+					const players = play.players || [];
+
+					// Check if this player appears in this play using player ID (most reliable)
+					const playerInPlay = players.find((p: any) => {
+						const playPlayerId = p.person?.id || p.id;
+						return playPlayerId === playerId;
+					});
+
+					if (playerInPlay) {
+						const about = play.about;
+						if (about && about.inning) {
+							estimatedInning = about.inning;
+							estimatedHalfInning = about.halfInning || 'top';
+							console.log(
+								`DEBUG: Found ${playerName} (ID: ${playerId}) first appearance in inning ${estimatedInning} ${estimatedHalfInning}`
+							);
+							break;
+						}
+					}
+				}
+
+				// If still not found by ID, try name matching as fallback
+				if (estimatedInning === 9) {
+					console.log(`DEBUG: Player ${playerName} (ID: ${playerId}) not found by ID, trying name matching...`);
+					for (let i = 0; i < allPlays.length; i++) {
+						const play = allPlays[i];
+						const players = play.players || [];
+
+						// Check if this player appears in this play - try multiple name formats
+						const playerInPlay = players.find((p: any) => {
+							const playPlayerName = p.person?.fullName || p.name || '';
+							return (
+								playPlayerName === playerName ||
+								playPlayerName.includes(playerName.split(' ')[0]) ||
+								playPlayerName.includes(playerName.split(' ')[1])
+							);
+						});
+
+						if (playerInPlay) {
+							const about = play.about;
+							if (about && about.inning) {
+								estimatedInning = about.inning;
+								estimatedHalfInning = about.halfInning || 'top';
+								console.log(`DEBUG: Found ${playerName} by name in inning ${estimatedInning} ${estimatedHalfInning}`);
+								break;
+							}
+						}
+					}
+				}
+
+				// If still not found, try a different approach - look for the player in the play description
+				if (estimatedInning === 9) {
+					console.log(`DEBUG: Player ${playerName} not found in play players, checking descriptions...`);
+					for (let i = 0; i < allPlays.length; i++) {
+						const play = allPlays[i];
+						const description = play.result?.description || '';
+
+						// Check if player name appears in the play description
+						if (description.toLowerCase().includes(playerName.toLowerCase())) {
+							const about = play.about;
+							if (about && about.inning) {
+								estimatedInning = about.inning;
+								estimatedHalfInning = about.halfInning || 'top';
+								console.log(
+									`DEBUG: Found ${playerName} in description of inning ${estimatedInning} ${estimatedHalfInning}: "${description}"`
+								);
+								break;
+							}
+						}
+					}
+				}
+
+				// Store the substitution data
+				substitutionData.set(playerName, {
+					type: substitutionType,
+					inning: estimatedInning,
+					halfInning: estimatedHalfInning,
+				});
+
+				console.log(`DEBUG: Derived substitution for ${playerName}:`, {
+					type: substitutionType,
+					inning: estimatedInning,
+					halfInning: estimatedHalfInning,
+				});
+			}
+		});
+	});
+
+	return substitutionData;
+}
+
 // Helper function to process substitution events and determine types and innings
 function processSubstitutionEvents(
 	substitutionEvents: any[]
 ): Map<string, { type: string; inning: number; halfInning: string }> {
 	const substitutionData = new Map<string, { type: string; inning: number; halfInning: string }>();
 
-	substitutionEvents.forEach((event: any) => {
+	console.log('DEBUG: processSubstitutionEvents called with', substitutionEvents.length, 'events');
+	substitutionEvents.forEach((event: any, index: number) => {
+		if (index < 3) {
+			// Only log first 3 for debugging
+			console.log('DEBUG: Processing substitution event', index, ':', {
+				eventType: event.result?.eventType,
+				description: event.result?.description,
+				hasPlayers: !!event.players,
+				playersCount: event.players?.length || 0,
+				// Check MLB API spec properties
+				isSubstitution: event.isSubstitution,
+				hasSubstitution: !!event.substitution,
+				substitution: event.substitution,
+				about: event.about,
+			});
+		}
 		const description = event.result?.description || '';
 		const players = event.players || [];
 		const about = event.about || {};
@@ -505,21 +1132,39 @@ function processSubstitutionEvents(
 		const playerName = enteringPlayer.person?.fullName || enteringPlayer.name;
 		if (!playerName) return;
 
-		// Determine substitution type based on description
+		// Determine substitution type based on event type first, then description
 		let substitutionType = 'DEF'; // Default to defensive substitution
+		const eventType = event.result?.eventType;
 
-		if (description.includes('Pinch-hitter') || description.includes('Pinch hitter')) {
-			substitutionType = 'PH';
-		} else if (description.includes('Pinch-runner') || description.includes('Pinch runner')) {
-			substitutionType = 'PR';
-		} else if (description.includes('Pitching Substitution')) {
+		// Use event type if available
+		if (eventType === 'pitching_substitution') {
 			substitutionType = 'DEF';
-		} else if (description.includes('Defensive Sub') || description.includes('Defensive sub')) {
+		} else if (eventType === 'offensive_substitution') {
+			// For offensive substitutions, we need to determine if it's PH or PR from description
+			if (description.includes('Pinch-hitter') || description.includes('Pinch hitter')) {
+				substitutionType = 'PH';
+			} else if (description.includes('Pinch-runner') || description.includes('Pinch runner')) {
+				substitutionType = 'PR';
+			} else {
+				substitutionType = 'PH'; // Default offensive substitution to PH
+			}
+		} else if (eventType === 'defensive_substitution') {
 			substitutionType = 'DEF';
-		} else if (description.includes('Offensive Sub') || description.includes('Offensive sub')) {
-			// For offensive substitutions, we need to determine if it's PH or PR
-			// This is a limitation - we can't always distinguish without more context
-			substitutionType = 'PH'; // Default to PH for offensive subs
+		} else if (eventType === 'Substitution') {
+			// Fallback to description parsing for generic 'Substitution' events
+			if (description.includes('Pinch-hitter') || description.includes('Pinch hitter')) {
+				substitutionType = 'PH';
+			} else if (description.includes('Pinch-runner') || description.includes('Pinch runner')) {
+				substitutionType = 'PR';
+			} else if (description.includes('Pitching Substitution')) {
+				substitutionType = 'DEF';
+			} else if (description.includes('Defensive Sub') || description.includes('Defensive sub')) {
+				substitutionType = 'DEF';
+			} else if (description.includes('Offensive Sub') || description.includes('Offensive sub')) {
+				// For offensive substitutions, we need to determine if it's PH or PR
+				// This is a limitation - we can't always distinguish without more context
+				substitutionType = 'PH'; // Default to PH for offensive subs
+			}
 		}
 
 		// Extract inning information from the about field
@@ -1268,10 +1913,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 }
 
 export async function getGameDetails(gameId: string): Promise<GameData> {
-	console.error('*** getGameDetails FUNCTION CALLED ***');
-	console.error('*** Game ID:', gameId, '***');
-	console.error('*** END getGameDetails CALL ***');
-
 	try {
 		// Create cache key for game details
 		const gameDetailsCacheKey = createCacheKey('gameDetails', gameId);
@@ -1463,17 +2104,267 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 							};
 						if (boxscore && boxscore.teams) {
 							// Process substitution events from play-by-play
+							console.log('DEBUG: Total allPlays count:', allPlays.length);
+							console.log(
+								'DEBUG: Sample allPlays events:',
+								allPlays.slice(0, 10).map((play: any) => ({
+									eventType: play.result?.eventType,
+									description: play.result?.description,
+									hasPlayers: !!play.players,
+									playersCount: play.players?.length || 0,
+									// Check MLB API spec properties for substitutions
+									isSubstitution: play.isSubstitution,
+									hasSubstitution: !!play.substitution,
+									substitutionKeys: play.substitution ? Object.keys(play.substitution) : null,
+									about: play.about
+										? {
+												inning: play.about.inning,
+												halfInning: play.about.halfInning,
+										  }
+										: null,
+								}))
+							);
+
+							// Debug: Show all unique event types in allPlays
+							const eventTypes = allPlays.map((play: any) => play.result?.eventType).filter(Boolean);
+							const uniqueEventTypes = [...new Set(eventTypes)];
+							console.log('DEBUG: All unique event types in allPlays:', uniqueEventTypes);
+
+							// Debug: Check if there are other event types in the game feed
+							console.log('DEBUG: Game feed structure keys:', Object.keys(gameFeedData || {}));
+							if (gameFeedData?.liveData) {
+								console.log('DEBUG: LiveData keys:', Object.keys(gameFeedData.liveData));
+								if (gameFeedData.liveData.plays) {
+									console.log('DEBUG: Plays keys:', Object.keys(gameFeedData.liveData.plays));
+									// Check if there are substitution events in a different section
+									if (gameFeedData.liveData.plays.allPlays) {
+										const allEvents = gameFeedData.liveData.plays.allPlays;
+										const allEventTypes = allEvents.map((play: any) => play.result?.eventType).filter(Boolean);
+										const allUniqueEventTypes = [...new Set(allEventTypes)];
+										console.log('DEBUG: All event types in liveData.plays.allPlays:', allUniqueEventTypes);
+									}
+									// Check for substitution events in other play sections
+									if (gameFeedData.liveData.plays.substitutionEvents) {
+										console.log(
+											'DEBUG: Found substitutionEvents section:',
+											gameFeedData.liveData.plays.substitutionEvents
+										);
+									}
+									if (gameFeedData.liveData.plays.substitutions) {
+										console.log('DEBUG: Found substitutions section:', gameFeedData.liveData.plays.substitutions);
+									}
+									// Check playsByInning for substitution events using MLB API spec
+									if (gameFeedData.liveData.plays.playsByInning) {
+										console.log(
+											'DEBUG: playsByInning structure:',
+											Object.keys(gameFeedData.liveData.plays.playsByInning)
+										);
+
+										// Examine the structure of each inning
+										Object.entries(gameFeedData.liveData.plays.playsByInning).forEach(
+											([inningNum, inning]: [string, any]) => {
+												console.log(`DEBUG: Inning ${inningNum} structure:`, {
+													hasTop: !!inning.top,
+													hasBottom: !!inning.bottom,
+													topPlays: inning.top?.length || 0,
+													bottomPlays: inning.bottom?.length || 0,
+													topSample:
+														inning.top?.slice(0, 2).map((play: any) => ({
+															eventType: play.result?.eventType,
+															isSubstitution: play.isSubstitution,
+															hasSubstitution: !!play.substitution,
+															description: play.result?.description,
+														})) || [],
+													bottomSample:
+														inning.bottom?.slice(0, 2).map((play: any) => ({
+															eventType: play.result?.eventType,
+															isSubstitution: play.isSubstitution,
+															hasSubstitution: !!play.substitution,
+															description: play.result?.description,
+														})) || [],
+												});
+											}
+										);
+
+										// Look for substitution events in inning-by-inning data using API spec
+										const allInningEvents = [];
+										Object.values(gameFeedData.liveData.plays.playsByInning).forEach((inning: any) => {
+											if (inning.top) allInningEvents.push(...inning.top);
+											if (inning.bottom) allInningEvents.push(...inning.bottom);
+										});
+
+										const substitutionEventsInInnings = allInningEvents.filter(
+											(play: any) =>
+												// Use MLB API spec properties
+												play.isSubstitution === true ||
+												play.substitution !== undefined ||
+												// Fallback to event type and description
+												play.result?.eventType?.includes('substitution') ||
+												play.result?.description?.toLowerCase().includes('pinch') ||
+												play.result?.description?.toLowerCase().includes('sub')
+										);
+										console.log('DEBUG: Substitution events in playsByInning:', substitutionEventsInInnings.length);
+										if (substitutionEventsInInnings.length > 0) {
+											console.log(
+												'DEBUG: Sample substitution events from playsByInning:',
+												substitutionEventsInInnings.slice(0, 3).map((play: any) => ({
+													eventType: play.result?.eventType,
+													isSubstitution: play.isSubstitution,
+													substitution: play.substitution,
+													description: play.result?.description,
+													about: play.about,
+												}))
+											);
+										}
+									}
+								}
+							}
+
+							// Debug: Show events that might be substitutions
+							const possibleSubstitutions = allPlays.filter((play: any) => {
+								const desc = play.result?.description?.toLowerCase() || '';
+								return (
+									desc.includes('pinch') ||
+									desc.includes('sub') ||
+									desc.includes('replace') ||
+									play.result?.eventType?.toLowerCase().includes('sub')
+								);
+							});
+							console.log('DEBUG: Possible substitution events found:', possibleSubstitutions.length);
+							if (possibleSubstitutions.length > 0) {
+								console.log(
+									'DEBUG: Sample possible substitutions:',
+									possibleSubstitutions.slice(0, 3).map((play: any) => ({
+										eventType: play.result?.eventType,
+										description: play.result?.description,
+										about: play.about,
+									}))
+								);
+							}
+
+							// Debug: Look for substitution events using MLB API spec properties
 							const substitutionEvents = allPlays.filter(
 								(play: any) =>
+									// Use isSubstitution flag from API spec
+									play.isSubstitution === true ||
+									// Check for substitution object from API spec
+									play.substitution !== undefined ||
+									// Check event types from API spec
 									play.result?.eventType === 'Substitution' ||
+									play.result?.eventType === 'pitching_substitution' ||
+									play.result?.eventType === 'offensive_substitution' ||
+									play.result?.eventType === 'defensive_substitution' ||
+									// Fallback to description parsing
 									play.result?.description?.includes('Pinch') ||
 									play.result?.description?.includes('Defensive Sub')
 							);
+							console.log('DEBUG: Found substitution events:', substitutionEvents.length);
+							console.log('DEBUG: Sample substitution events:', substitutionEvents.slice(0, 3));
 							const substitutionData = processSubstitutionEvents(substitutionEvents);
+							console.log('DEBUG: Processed substitution data:', substitutionData.size, 'entries');
+
+							// Since no substitution events found in play-by-play, derive timing from boxscore data
+							if (substitutionData.size === 0) {
+								console.log('DEBUG: No substitution events found in play-by-play, deriving from boxscore data');
+								const derivedSubstitutionData = deriveSubstitutionTimingFromBoxscore(boxscore, allPlays);
+								console.log('DEBUG: Derived substitution data from boxscore:', derivedSubstitutionData.size, 'entries');
+
+								// Merge derived data with existing substitution data
+								derivedSubstitutionData.forEach((value, key) => {
+									substitutionData.set(key, value);
+								});
+								console.log('DEBUG: Final combined substitution data:', substitutionData.size, 'entries');
+
+								// Apply substitution timing data to individual players in the boxscore
+								substitutionData.forEach((subData, playerName) => {
+									// Find the player in both teams and update their data
+									[boxscore.teams.away, boxscore.teams.home].forEach((team: any) => {
+										Object.values(team.players).forEach((player: any) => {
+											if (player.person?.fullName === playerName) {
+												// Add substitution timing data to the player object
+												player.substitution_inning = subData.inning;
+												player.substitution_half_inning = subData.halfInning;
+												player.substitution_type = subData.type;
+												console.log(`DEBUG: Applied substitution data to ${playerName}:`, {
+													inning: subData.inning,
+													halfInning: subData.halfInning,
+													type: subData.type,
+												});
+											}
+										});
+									});
+								});
+
+								// Also update the substitutionData map with the applied data for extractBatterStats
+								substitutionData.forEach((subData, playerName) => {
+									// Find players in the processed teams and update their substitution data
+									[boxscore.teams.away, boxscore.teams.home].forEach((team: any) => {
+										Object.values(team.players).forEach((player: any) => {
+											if (player.person?.fullName === playerName) {
+												// Update the substitutionData map with the player's substitution data
+												substitutionData.set(playerName, {
+													type: player.substitution_type || subData.type,
+													inning: player.substitution_inning || subData.inning,
+													halfInning: player.substitution_half_inning || subData.halfInning,
+												});
+											}
+										});
+									});
+								});
+							}
+
+							// Debug: Look at player data to see if we can identify substitutions from boxscore
+							console.log(
+								'DEBUG: Away team batters with substitution info:',
+								boxscore.teams.away.batters.slice(0, 5).map((batterId: any) => {
+									const player = boxscore.teams.away.players[`ID${batterId}`];
+									return {
+										name: player?.person?.fullName,
+										isSubstitute: player?.gameStatus?.isSubstitute,
+										allPositions: player?.allPositions?.map((p: any) => ({ code: p.code, name: p.name })),
+										battingOrder: player?.battingOrder,
+										gameStatus: player?.gameStatus,
+										// Check for substitution timing data
+										substitutionInning: player?.substitutionInning,
+										substitutionHalfInning: player?.substitutionHalfInning,
+										// Check all player properties for timing data
+										playerKeys: Object.keys(player || {}),
+									};
+								})
+							);
+
+							// Debug: Show detailed player data structure for first player with substitutions
+							const firstSubPlayer = boxscore.teams.away.batters.find((batterId: any) => {
+								const player = boxscore.teams.away.players[`ID${batterId}`];
+								return player?.allPositions && player.allPositions.length > 1;
+							});
+							if (firstSubPlayer) {
+								const player = boxscore.teams.away.players[`ID${firstSubPlayer}`];
+								console.log('DEBUG: Detailed player data for first substitution player:', {
+									name: player?.person?.fullName,
+									allPositions: player?.allPositions,
+									gameStatus: player?.gameStatus,
+									stats: player?.stats,
+									seasonStats: player?.seasonStats,
+									allKeys: Object.keys(player || {}),
+									// Check specific properties that might contain timing
+									substitutionData: {
+										substitutionInning: player?.substitutionInning,
+										substitutionHalfInning: player?.substitutionHalfInning,
+										substitutionType: player?.substitutionType,
+										entryInning: player?.entryInning,
+										exitInning: player?.exitInning,
+									},
+								});
+							}
 
 							// Process away team stats
 							if (boxscore.teams.away && boxscore.teams.away.batters) {
-								const awayBatters = extractBatterStats(boxscore.teams.away.batters, substitutionData);
+								const awayBatters = extractBatterStats(
+									boxscore.teams.away.batters,
+									boxscore.teams.away.players,
+									substitutionData
+								);
 								// Extract ALL players who have pitched (including position players who pitched)
 								const awayPitchers = extractAllPitchersFromGame(boxscore.teams.away, players, true);
 								playerStats.away = { batters: awayBatters, pitchers: awayPitchers };
@@ -1481,7 +2372,11 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 
 							// Process home team stats
 							if (boxscore.teams.home && boxscore.teams.home.batters) {
-								const homeBatters = extractBatterStats(boxscore.teams.home.batters, substitutionData);
+								const homeBatters = extractBatterStats(
+									boxscore.teams.home.batters,
+									boxscore.teams.home.players,
+									substitutionData
+								);
 								// Extract ALL players who have pitched (including position players who pitched)
 								const homePitchers = extractAllPitchersFromGame(boxscore.teams.home, players, false);
 								playerStats.home = { batters: homeBatters, pitchers: homePitchers };
@@ -1489,7 +2384,12 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 						}
 
 						// Process play-by-play data for at-bat results
-						const playByPlayData = processPlayByPlayData(allPlays, players);
+						// Combine away and home team players for play-by-play processing
+						const allTeamPlayers = {
+							...(boxscore.teams.away?.players || {}),
+							...(boxscore.teams.home?.players || {}),
+						};
+						const playByPlayData = processPlayByPlayData(allPlays, allTeamPlayers);
 
 						console.log('Final player stats before return:', {
 							awayBatters: playerStats.away.batters.length,
@@ -1510,7 +2410,7 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 						const wind = extractWind(gameFeedData);
 
 						// Store comprehensive data for return
-						return {
+						const detailedGameData = {
 							game_id: gameId,
 							game_data: {
 								away_team: {
@@ -1544,13 +2444,26 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 							svg_content: generateDetailedSVGFromSchedule(gameData, awayCodeFromName, homeCodeFromName, inningList),
 							success: true,
 						};
+
+						console.log('Returning detailed game data with play-by-play:', {
+							hasPlayByPlay: !!playByPlayData,
+							atBatsCount: playByPlayData?.atBats?.size || 0,
+							substitutionsCount: playByPlayData?.substitutions?.size || 0,
+						});
+
+						return detailedGameData;
 					}
 				} catch (feedError) {
 					console.log(`Error fetching detailed data for game ${gameData.gamePk}:`, feedError);
+					console.log('Error details:', {
+						message: (feedError as Error).message,
+						stack: (feedError as Error).stack,
+						gamePk: gameData.gamePk,
+					});
 					// Continue with basic data if detailed feed fails
 				}
 
-				// Return the game data
+				// Return the game data (fallback)
 				return {
 					game_id: gameId,
 					game_data: {

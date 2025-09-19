@@ -22,6 +22,83 @@ let globalFootnoteCounter = 1;
 const globalFootnotes: { [key: string]: number } = {};
 const allSubstitutions: Array<{ footnote: string; order: number }> = [];
 
+// Helper function to convert position number to abbreviation
+const getPositionAbbreviation = (positionNumber: string): string => {
+	const positionMap: { [key: string]: string } = {
+		'1': 'P',
+		'2': 'C',
+		'3': '1B',
+		'4': '2B',
+		'5': '3B',
+		'6': 'SS',
+		'7': 'LF',
+		'8': 'CF',
+		'9': 'RF',
+		'10': 'DH',
+	};
+	return positionMap[positionNumber] || positionNumber;
+};
+
+// Helper function to convert MLB API position codes to abbreviations
+const mapPositionCodeToAbbreviation = (positionCode: string): string => {
+	const positionCodeMap: { [key: string]: string } = {
+		'1': 'P',
+		'2': 'C',
+		'3': '1B',
+		'4': '2B',
+		'5': '3B',
+		'6': 'SS',
+		'7': 'LF',
+		'8': 'CF',
+		'9': 'RF',
+		'10': 'DH',
+		'11': 'PH', // Pinch Hitter
+		'12': 'PR', // Pinch Runner
+	};
+	return positionCodeMap[positionCode] || positionCode;
+};
+
+// Helper function to format slash line without leading zeros
+const formatSlashLine = (average: string, onBasePercentage: string, sluggingPercentage: string): string => {
+	const formatNumber = (num: string): string => {
+		const parsed = parseFloat(num);
+		if (isNaN(parsed)) return num;
+		return parsed.toFixed(3).replace(/^0+/, '') || '0.000';
+	};
+
+	return `${formatNumber(average)}/${formatNumber(onBasePercentage)}/${formatNumber(sluggingPercentage)}`;
+};
+
+// Helper function to determine which innings need extra columns for multiple at-bats
+const getInningColumnStructure = (
+	batters: BatterData[],
+	displayInnings: number,
+	detailedData: DetailedGameData | null
+): { inningColumns: number[]; totalColumns: number } => {
+	const inningColumns: number[] = [];
+
+	// Check each inning for multiple at-bats
+	for (let inning = 1; inning <= displayInnings; inning++) {
+		let hasMultipleAtBats = false;
+
+		// Check all batters in this inning
+		for (const batter of batters) {
+			const atBatResults = getAtBatResultsForInning(batter, inning, detailedData);
+			if (atBatResults.length > 1) {
+				hasMultipleAtBats = true;
+				break;
+			}
+		}
+
+		// If this inning has multiple at-bats, we need 2 columns (X and Xb)
+		inningColumns.push(hasMultipleAtBats ? 2 : 1);
+	}
+
+	const totalColumns = inningColumns.reduce((sum, cols) => sum + cols, 0);
+
+	return { inningColumns, totalColumns };
+};
+
 // Helper function to generate descriptive footnotes
 const generateFootnote = (
 	sub: any,
@@ -81,10 +158,13 @@ const generateFootnote = (
 
 	let footnote = '';
 
+	// Convert position number to abbreviation for footnotes
+	const displayPositionAbbr = displayPosition ? getPositionAbbreviation(displayPosition) : displayPosition;
+
 	if (actualSubstitutionType === 'PH') {
 		if (displayPosition && displayPosition !== 'PH' && displayPosition !== 'PR' && displayPosition !== 'DH') {
 			// They took a defensive position and remained in the game
-			footnote = `${subName} pinch hit for ${replacedPlayer} in the ${halfInningText} of the ${inningText} and remained in the game as ${displayPosition}, batting ${
+			footnote = `${subName} pinch hit for ${replacedPlayer} in the ${halfInningText} of the ${inningText} and remained in the game as ${displayPositionAbbr}, batting ${
 				sub.batting_order?.substring(0, 1) || '?'
 			}th.`;
 		} else {
@@ -100,7 +180,7 @@ const generateFootnote = (
 			displayPosition !== (starter.position?.abbreviation || starter.position)
 		) {
 			// They took a defensive position
-			footnote = `${subName} pinch ran for ${replacedPlayer} in the ${halfInningText} of the ${inningText} and remained in the game at ${displayPosition}, batting ${
+			footnote = `${subName} pinch ran for ${replacedPlayer} in the ${halfInningText} of the ${inningText} and remained in the game at ${displayPositionAbbr}, batting ${
 				sub.batting_order?.substring(0, 1) || '?'
 			}th.`;
 		} else {
@@ -110,7 +190,7 @@ const generateFootnote = (
 			}th.`;
 		}
 	} else if (actualSubstitutionType === 'DEF') {
-		footnote = `${subName} replaced ${replacedPlayer} in the ${halfInningText} of the ${inningText}, playing ${displayPosition} and batting ${
+		footnote = `${subName} replaced ${replacedPlayer} in the ${halfInningText} of the ${inningText}, playing ${displayPositionAbbr} and batting ${
 			sub.batting_order?.substring(0, 1) || '?'
 		}th.`;
 	}
@@ -299,12 +379,28 @@ const processBatterData = (
 				const actualSubstitutionType = sub.substitution_type || substitutionType;
 
 				// Use inning data from play-by-play if available
-				if (sub.substitution_inning) {
+				if (sub.inning) {
+					actualInning = sub.inning;
+				} else if (sub.substitution_inning) {
 					actualInning = sub.substitution_inning;
 				}
-				if (sub.substitution_half_inning) {
+				if (sub.half_inning) {
+					actualHalfInning = sub.half_inning;
+				} else if (sub.substitution_half_inning) {
 					actualHalfInning = sub.substitution_half_inning;
 				}
+
+				// Debug: Log substitution data to see what we're getting
+				console.log('DEBUG: Substitution data for', sub.name, ':', {
+					subObject: sub,
+					actualInning,
+					actualHalfInning,
+					actualSubstitutionType,
+					hasInning: !!sub.inning,
+					hasSubstitutionInning: !!sub.substitution_inning,
+					hasHalfInning: !!sub.half_inning,
+					hasSubstitutionHalfInning: !!sub.substitution_half_inning,
+				});
 
 				// Determine half-inning based on substitution type and team
 				// Use API data if available, otherwise fall back to determined type
@@ -363,27 +459,26 @@ const processBatterData = (
 				previousSub = sub;
 			}
 
-			// Determine starter's final position
-			const starterInitialPosition = starter.position?.abbreviation || starter.position || 'OF';
+			// Determine starter's initial and final positions
+			let starterInitialPosition = starter.position?.abbreviation || starter.position || 'OF';
 			let starterFinalPosition = starterInitialPosition;
 
 			// Check if the starter changed positions during the game
-			// Look for evidence of position changes in the game data
-			// For now, we'll use a simple heuristic: if there are multiple substitutions for this batting order,
-			// it might indicate the starter moved positions
-			if (substitutions.length >= 2) {
-				// If there are multiple substitutions, the starter might have moved to a different position
-				// Look for patterns that suggest position changes
-				const firstSub = substitutions[0];
-				const secondSub = substitutions[1];
+			// Use the all_positions data to detect position changes
+			if (starter.all_positions && starter.all_positions.length > 1) {
+				// Starter has multiple positions - they changed positions during the game
+				const firstPosition = starter.all_positions[0];
+				const lastPosition = starter.all_positions[starter.all_positions.length - 1];
 
-				// If the first substitution is a defensive replacement and takes the starter's position,
-				// the starter might have moved to a different position
-				if (firstSub.substitution_type === 'DEF' && firstSub.position === starterInitialPosition) {
-					// The starter likely moved to a different position
-					// We'll need actual game data to determine this accurately
-					// For now, we'll assume no position change unless we have clear evidence
-				}
+				// Convert position codes to abbreviations
+				starterInitialPosition = mapPositionCodeToAbbreviation(firstPosition.code);
+				starterFinalPosition = mapPositionCodeToAbbreviation(lastPosition.code);
+
+				console.log(
+					`DEBUG: Starter ${
+						starter.person?.fullName || starter.name
+					} changed positions: ${starterInitialPosition} -> ${starterFinalPosition}`
+				);
 			}
 
 			result.push({
@@ -501,21 +596,34 @@ const getAtBatResultsForInning = (
 
 	const playByPlay = detailedData.play_by_play;
 	const atBatResults: Array<{ atBatResult: string; endedInning: boolean }> = [];
-
-	// Get at-bats for this batter in this inning
-	const batterName = batter.name;
 	const halfInning = batter.isAway ? 'top' : 'bottom';
-	const atBatKey = `${batterName}-${inningNumber}-${halfInning}`;
 
-	if (playByPlay.atBats && playByPlay.atBats.has(atBatKey)) {
-		const atBats = playByPlay.atBats.get(atBatKey) || [];
-		atBats.forEach((atBat) => {
-			atBatResults.push({
-				atBatResult: atBat.atBatResult || '',
-				endedInning: atBat.outs >= 3 || atBat.endedInning,
-			});
+	// Get all players in this batting order position (including substitutes)
+	const allPlayersInPosition: string[] = [batter.name];
+
+	// Add substitute players from the substitutions array
+	if (batter.substitutions && batter.substitutions.length > 0) {
+		batter.substitutions.forEach((sub) => {
+			if (sub.player_name && !allPlayersInPosition.includes(sub.player_name)) {
+				allPlayersInPosition.push(sub.player_name);
+			}
 		});
 	}
+
+	// Look for at-bats from any player in this batting order position
+	allPlayersInPosition.forEach((playerName) => {
+		const atBatKey = `${playerName}-${inningNumber}-${halfInning}`;
+
+		if (playByPlay.atBats && playByPlay.atBats.has(atBatKey)) {
+			const atBats = playByPlay.atBats.get(atBatKey) || [];
+			atBats.forEach((atBat) => {
+				atBatResults.push({
+					atBatResult: atBat.atBatResult || '',
+					endedInning: atBat.outs >= 3 || atBat.endedInning,
+				});
+			});
+		}
+	});
 
 	return atBatResults;
 };
@@ -528,6 +636,7 @@ const BatterRow = ({
 	isAway = true,
 	isLastRow = false,
 	detailedData,
+	inningColumns,
 }: {
 	batter: BatterData;
 	index: number;
@@ -535,14 +644,16 @@ const BatterRow = ({
 	isAway?: boolean;
 	isLastRow?: boolean;
 	detailedData: DetailedGameData | null;
+	inningColumns: number[];
 }) => {
+	// Create dynamic column template based on inning structure
+	const inningColumnTemplate = inningColumns.map((cols) => Array(cols).fill('1fr').join(' ')).join(' ');
+
 	return (
 		<div
 			className={`grid gap-0 ${isLastRow ? '' : 'border-b border-primary-300 dark:border-primary-700'}`}
 			style={{
-				gridTemplateColumns: `40px 200px 30px ${Array(displayInnings)
-					.fill('1fr')
-					.join(' ')} 45px 45px 45px 45px 45px 45px`,
+				gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
 			}}>
 			{/* Player Number */}
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
@@ -559,18 +670,20 @@ const BatterRow = ({
 
 			{/* Player Name */}
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-800 h-18">
-				<div className="flex flex-col px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
-					<span className="font-bold text-2xs text-primary-900 dark:text-primary-100">{batter.name}</span>
+				<div className="flex justify-between items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+					<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
+						{batter.name}
+					</span>
 					{batter.average && batter.onBasePercentage && batter.sluggingPercentage && (
-						<span className="text-[8px] text-primary-600 dark:text-primary-400">
-							{batter.average}/{batter.onBasePercentage}/{batter.sluggingPercentage}
+						<span className="flex-shrink-0 ml-2 font-normal text-[8px] text-primary-600 dark:text-primary-400">
+							{formatSlashLine(batter.average, batter.onBasePercentage, batter.sluggingPercentage)}
 						</span>
 					)}
 				</div>
-				<div className="flex flex-col px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+				<div className="flex justify-between items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
 					{batter.substitutions?.[0] && (
 						<>
-							<span className="font-bold text-2xs text-primary-900 dark:text-primary-100">
+							<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
 								{batter.substitutions[0].player_name}
 								{batter.substitutions[0].footnote && (
 									<sup className="text-[7px] text-primary-600 dark:text-primary-400">
@@ -581,18 +694,21 @@ const BatterRow = ({
 							{batter.substitutions[0].average &&
 								batter.substitutions[0].onBasePercentage &&
 								batter.substitutions[0].sluggingPercentage && (
-									<span className="text-[8px] text-primary-600 dark:text-primary-400">
-										{batter.substitutions[0].average}/{batter.substitutions[0].onBasePercentage}/
-										{batter.substitutions[0].sluggingPercentage}
+									<span className="flex-shrink-0 ml-2 font-normal text-[8px] text-primary-600 dark:text-primary-400">
+										{formatSlashLine(
+											batter.substitutions[0].average,
+											batter.substitutions[0].onBasePercentage,
+											batter.substitutions[0].sluggingPercentage
+										)}
 									</span>
 								)}
 						</>
 					)}
 				</div>
-				<div className="flex flex-col px-2 h-6 bg-primary-50 dark:bg-primary-800">
+				<div className="flex justify-between items-center px-2 h-6 bg-primary-50 dark:bg-primary-800">
 					{batter.substitutions?.[1] && (
 						<>
-							<span className="font-bold text-2xs text-primary-900 dark:text-primary-100">
+							<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
 								{batter.substitutions[1].player_name}
 								{batter.substitutions[1].footnote && (
 									<sup className="text-[7px] text-primary-600 dark:text-primary-400">
@@ -603,9 +719,12 @@ const BatterRow = ({
 							{batter.substitutions[1].average &&
 								batter.substitutions[1].onBasePercentage &&
 								batter.substitutions[1].sluggingPercentage && (
-									<span className="text-[8px] text-primary-600 dark:text-primary-400">
-										{batter.substitutions[1].average}/{batter.substitutions[1].onBasePercentage}/
-										{batter.substitutions[1].sluggingPercentage}
+									<span className="flex-shrink-0 ml-2 font-normal text-[8px] text-primary-600 dark:text-primary-400">
+										{formatSlashLine(
+											batter.substitutions[1].average,
+											batter.substitutions[1].onBasePercentage,
+											batter.substitutions[1].sluggingPercentage
+										)}
 									</span>
 								)}
 						</>
@@ -699,55 +818,69 @@ const BatterRow = ({
 			</div>
 
 			{/* Inning Columns */}
-			{Array.from({ length: displayInnings }, (_, i) => {
-				const inningNumber = i + 1;
-				const substitutionInning = batter.substitutions?.[0]?.inning || 0;
-				const substitutionType = batter.substitutions?.[0]?.substitution_type;
-				const isLastInning = i === displayInnings - 1;
+			{inningColumns
+				.map((columnCount, inningIndex) => {
+					const inningNumber = inningIndex + 1;
+					const isLastInning = inningIndex === inningColumns.length - 1;
 
-				// Get at-bat results for this inning
-				const atBatResults = getAtBatResultsForInning(batter, inningNumber, detailedData);
+					// Get at-bat results for this inning
+					const atBatResults = getAtBatResultsForInning(batter, inningNumber, detailedData);
 
-				// Determine border styling based on substitution type
-				let borderClass = isLastInning
-					? 'border-primary-200 dark:border-primary-700'
-					: 'border-r border-primary-200 dark:border-primary-700';
-				if (inningNumber === substitutionInning) {
-					if (substitutionType === 'PH' || substitutionType === 'DEF') {
-						borderClass = isLastInning
-							? 'border-l-2 border-l-primary-900 border-primary-200 dark:border-primary-700'
-							: 'border-r border-l-2 border-l-primary-900 border-primary-200 dark:border-primary-700';
-					} else if (substitutionType === 'PR') {
-						borderClass = isLastInning
-							? 'border-r-2 border-r-primary-900 border-primary-200 dark:border-primary-700'
-							: 'border-r border-r-2 border-r-primary-900 border-primary-200 dark:border-primary-700';
-					}
-				}
+					// Check if any substitution occurred in this inning
+					const substitutionInThisInning = batter.substitutions?.find((sub) => sub.inning === inningNumber);
 
-				// Add bottom border if this was the last at-bat of the inning
-				if (atBatResults.some((result) => result.endedInning)) {
-					borderClass += ' border-b-2 border-b-primary-900';
-				}
+					// Render columns for this inning (1 or 2 columns)
+					return Array.from({ length: columnCount }, (_, columnIndex) => {
+						const isSecondColumn = columnIndex === 1;
+						const atBatResult = atBatResults[columnIndex] || null;
+						const isLastColumnOfInning = columnIndex === columnCount - 1;
 
-				return (
-					<div key={i} className={`flex flex-col justify-center items-center h-fill w-fill ${borderClass}`}>
-						{/* Display at-bat results */}
-						{atBatResults.map((result, resultIndex) => (
-							<div key={resultIndex} className="flex justify-center items-center w-full h-full">
-								<span className="font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
-									{result.atBatResult}
-								</span>
+						// Determine border styling based on substitution type and column position
+						let borderClass = 'border-primary-200 dark:border-primary-700';
+
+						// Add right border unless it's the last column of the last inning
+						if (!(isLastColumnOfInning && isLastInning)) {
+							borderClass += ' border-r';
+						}
+
+						if (substitutionInThisInning) {
+							const substitutionType = substitutionInThisInning.substitution_type;
+							if (substitutionType === 'PH' || substitutionType === 'DEF') {
+								// Pinch hitter or defensive replacement comes in BEFORE their at-bat - left border
+								borderClass =
+									isLastColumnOfInning && isLastInning
+										? 'border-l-2 border-l-primary-900 border-primary-200 dark:border-primary-700'
+										: 'border-r border-l-2 border-l-primary-900 border-primary-200 dark:border-primary-700';
+							} else if (substitutionType === 'PR') {
+								// Pinch runner comes in AFTER the at-bat - right border
+								borderClass =
+									isLastColumnOfInning && isLastInning
+										? 'border-r-2 border-r-primary-900 border-primary-200 dark:border-primary-700'
+										: 'border-r border-r-2 border-r-primary-900 border-primary-200 dark:border-primary-700';
+							}
+						}
+
+						// Add bottom border if this was the last at-bat of the inning
+						if (atBatResult && atBatResult.endedInning) {
+							borderClass += ' border-b-2 border-b-primary-900';
+						}
+
+						return (
+							<div
+								key={`${inningNumber}-${columnIndex}`}
+								className={`flex justify-center items-center h-fill w-fill ${borderClass}`}>
+								{atBatResult ? (
+									<span className="font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
+										{atBatResult.atBatResult}
+									</span>
+								) : (
+									<span className="text-2xs text-primary-400 dark:text-primary-600"></span>
+								)}
 							</div>
-						))}
-						{/* Show empty cell if no at-bats */}
-						{atBatResults.length === 0 && (
-							<div className="flex justify-center items-center w-full h-full">
-								<span className="text-2xs text-primary-400 dark:text-primary-600"></span>
-							</div>
-						)}
-					</div>
-				);
-			})}
+						);
+					});
+				})
+				.flat()}
 
 			{/* Stats Columns */}
 			<div className="flex flex-col border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 h-18">
@@ -1223,6 +1356,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 					: { away: '', home: '' },
 				total_away_runs: gameData.game_data.total_away_runs,
 				total_home_runs: gameData.game_data.total_home_runs,
+				play_by_play: detailedGameData.game_data.play_by_play || undefined,
 			};
 
 			setDetailedData(transformedData);
@@ -1576,132 +1710,165 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 					</div>
 
 					{/* Column Headers */}
-					<div
-						className="grid gap-0 border-b border-primary-300 dark:border-primary-800"
-						style={{
-							gridTemplateColumns: `40px 200px 30px ${Array(displayInnings)
-								.fill('1fr')
-								.join(' ')} 45px 45px 45px 45px 45px 45px`,
-						}}>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							#
-						</div>
-						<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
-							BATTERS
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							POS
-						</div>
-						{Array.from({ length: displayInnings }, (_, i) => {
-							const isLastInning = i === displayInnings - 1;
-							return (
-								<div
-									key={i}
-									className={`flex justify-center items-center h-8 text-xs font-bold text-primary-900 dark:text-primary-100 ${
-										isLastInning
-											? 'border-primary-200 dark:border-primary-700'
-											: 'border-r border-primary-200 dark:border-primary-700'
-									}`}>
-									{i + 1}
+					{(() => {
+						const { inningColumns } = getInningColumnStructure(detailedData.batters.away, displayInnings, detailedData);
+						const inningColumnTemplate = inningColumns.map((cols) => Array(cols).fill('1fr').join(' ')).join(' ');
+
+						return (
+							<div
+								className="grid gap-0 border-b border-primary-300 dark:border-primary-800"
+								style={{
+									gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
+								}}>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									#
 								</div>
-							);
-						})}
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 text-primary-900 dark:text-primary-100">
-							AB
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							H
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							R
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							RBI
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							BB
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold text-primary-900 dark:text-primary-100">
-							SO
-						</div>
-					</div>
+								<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
+									BATTERS
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									POS
+								</div>
+								{inningColumns
+									.map((columnCount, inningIndex) => {
+										const inningNumber = inningIndex + 1;
+										const isLastInning = inningIndex === inningColumns.length - 1;
+
+										return Array.from({ length: columnCount }, (_, columnIndex) => {
+											const isSecondColumn = columnIndex === 1;
+											const isLastColumnOfInning = columnIndex === columnCount - 1;
+
+											return (
+												<div
+													key={`${inningNumber}-${columnIndex}`}
+													className={`flex justify-center items-center h-8 text-xs font-bold text-primary-900 dark:text-primary-100 ${
+														isLastColumnOfInning && isLastInning
+															? 'border-primary-200 dark:border-primary-700'
+															: 'border-r border-primary-200 dark:border-primary-700'
+													}`}>
+													{isSecondColumn ? `${inningNumber}b` : inningNumber}
+												</div>
+											);
+										});
+									})
+									.flat()}
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 text-primary-900 dark:text-primary-100">
+									AB
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									H
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									R
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									RBI
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									BB
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold text-primary-900 dark:text-primary-100">
+									SO
+								</div>
+							</div>
+						);
+					})()}
 
 					{/* Away Team Batters */}
-					{detailedData.batters.away.map((batter, index) => (
-						<BatterRow
-							key={index}
-							batter={batter}
-							index={index}
-							displayInnings={displayInnings}
-							isAway={true}
-							isLastRow={index === detailedData.batters.away.length - 1}
-							detailedData={detailedData}
-						/>
-					))}
+					{(() => {
+						const { inningColumns } = getInningColumnStructure(detailedData.batters.away, displayInnings, detailedData);
+						return detailedData.batters.away.map((batter, index) => (
+							<BatterRow
+								key={index}
+								batter={batter}
+								index={index}
+								displayInnings={displayInnings}
+								isAway={true}
+								isLastRow={index === detailedData.batters.away.length - 1}
+								detailedData={detailedData}
+								inningColumns={inningColumns}
+							/>
+						));
+					})()}
 
 					{/* Away Team Batters Summary Row */}
-					<div
-						className="grid gap-0 border-t border-primary-300 dark:border-primary-800"
-						style={{
-							gridTemplateColumns: `40px 200px 30px ${Array(displayInnings)
-								.fill('1fr')
-								.join(' ')} 45px 45px 45px 45px 45px 45px`,
-						}}>
-						{/* Combined first three columns */}
-						<div className="flex col-span-3 justify-end items-center px-2 h-8 font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
-							R/H/LOB/E
-						</div>
+					{(() => {
+						const { inningColumns } = getInningColumnStructure(detailedData.batters.away, displayInnings, detailedData);
+						const inningColumnTemplate = inningColumns.map((cols) => Array(cols).fill('1fr').join(' ')).join(' ');
 
-						{/* Inning columns with R/H/LOB/E totals */}
-						{Array.from({ length: displayInnings }, (_, i) => {
-							const inningRuns = detailedData.batters.away.reduce((sum, batter) => sum + (batter.runs || 0), 0);
-							const inningHits = detailedData.batters.away.reduce((sum, batter) => sum + (batter.hits || 0), 0);
-							const inningLOB = 0; // Would need to calculate from game data
-							const inningErrors = 0; // Would need to calculate from game data
-							const isLastInning = i === displayInnings - 1;
-							return (
-								<div
-									key={i}
-									className={`flex justify-center items-center h-8 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100 ${
-										isLastInning
-											? 'border-primary-200 dark:border-primary-700'
-											: 'border-r border-primary-200 dark:border-primary-700'
-									}`}>
-									{`${inningRuns}/${inningHits}/${inningLOB}/${inningErrors}`}
+						return (
+							<div
+								className="grid gap-0 border-t border-primary-300 dark:border-primary-800"
+								style={{
+									gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
+								}}>
+								{/* Combined first three columns */}
+								<div className="flex col-span-3 justify-end items-center px-2 h-8 font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
+									R/H/LOB/E
 								</div>
-							);
-						})}
 
-						{/* AB Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r border-l text-2xs text-primary-900 dark:text-primary-100 border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700">
-							{detailedData.batters.away.reduce((sum, batter) => sum + (batter.at_bats || 0), 0)}
-						</div>
+								{/* Inning columns with R/H/LOB/E totals */}
+								{inningColumns
+									.map((columnCount, inningIndex) => {
+										const inningNumber = inningIndex + 1;
+										const isLastInning = inningIndex === inningColumns.length - 1;
 
-						{/* H Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-							{detailedData.batters.away.reduce((sum, batter) => sum + (batter.hits || 0), 0)}
-						</div>
+										// Only show stats in the first column of each inning (not in Xb columns)
+										return Array.from({ length: columnCount }, (_, columnIndex) => {
+											const isFirstColumn = columnIndex === 0;
+											const isLastColumnOfInning = columnIndex === columnCount - 1;
 
-						{/* R Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-							{detailedData.batters.away.reduce((sum, batter) => sum + (batter.runs || 0), 0)}
-						</div>
+											const inningRuns = detailedData.batters.away.reduce((sum, batter) => sum + (batter.runs || 0), 0);
+											const inningHits = detailedData.batters.away.reduce((sum, batter) => sum + (batter.hits || 0), 0);
+											const inningLOB = 0; // Would need to calculate from game data
+											const inningErrors = 0; // Would need to calculate from game data
 
-						{/* RBI Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-							{detailedData.batters.away.reduce((sum, batter) => sum + (batter.rbi || 0), 0)}
-						</div>
+											return (
+												<div
+													key={`${inningNumber}-${columnIndex}`}
+													className={`flex justify-center items-center h-8 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100 ${
+														isLastColumnOfInning && isLastInning
+															? 'border-primary-200 dark:border-primary-700'
+															: 'border-r border-primary-200 dark:border-primary-700'
+													}`}>
+													{isFirstColumn ? `${inningRuns}/${inningHits}/${inningLOB}/${inningErrors}` : ''}
+												</div>
+											);
+										});
+									})
+									.flat()}
+								{/* AB Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r border-l text-2xs text-primary-900 dark:text-primary-100 border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700">
+									{detailedData.batters.away.reduce((sum, batter) => sum + (batter.at_bats || 0), 0)}
+								</div>
 
-						{/* BB Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-							{detailedData.batters.away.reduce((sum, batter) => sum + (batter.walks || 0), 0)}
-						</div>
+								{/* H Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{detailedData.batters.away.reduce((sum, batter) => sum + (batter.hits || 0), 0)}
+								</div>
 
-						{/* SO Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
-							{detailedData.batters.away.reduce((sum, batter) => sum + (batter.strikeouts || 0), 0)}
-						</div>
-					</div>
+								{/* R Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{detailedData.batters.away.reduce((sum, batter) => sum + (batter.runs || 0), 0)}
+								</div>
+
+								{/* RBI Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{detailedData.batters.away.reduce((sum, batter) => sum + (batter.rbi || 0), 0)}
+								</div>
+
+								{/* BB Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{detailedData.batters.away.reduce((sum, batter) => sum + (batter.walks || 0), 0)}
+								</div>
+
+								{/* SO Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
+									{detailedData.batters.away.reduce((sum, batter) => sum + (batter.strikeouts || 0), 0)}
+								</div>
+							</div>
+						);
+					})()}
 				</div>
 
 				{/* Away Team Pitcher Table */}
@@ -1816,132 +1983,165 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 					</div>
 
 					{/* Column Headers */}
-					<div
-						className="grid gap-0 border-b border-primary-300 dark:border-primary-800"
-						style={{
-							gridTemplateColumns: `40px 200px 30px ${Array(displayInnings)
-								.fill('1fr')
-								.join(' ')} 45px 45px 45px 45px 45px 45px`,
-						}}>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							#
-						</div>
-						<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
-							BATTERS
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							POS
-						</div>
-						{Array.from({ length: displayInnings }, (_, i) => {
-							const isLastInning = i === displayInnings - 1;
-							return (
-								<div
-									key={i}
-									className={`flex justify-center items-center h-8 text-xs font-bold text-primary-900 dark:text-primary-100 ${
-										isLastInning
-											? 'border-primary-200 dark:border-primary-700'
-											: 'border-r border-primary-200 dark:border-primary-700'
-									}`}>
-									{i + 1}
+					{(() => {
+						const { inningColumns } = getInningColumnStructure(detailedData.batters.home, displayInnings, detailedData);
+						const inningColumnTemplate = inningColumns.map((cols) => Array(cols).fill('1fr').join(' ')).join(' ');
+
+						return (
+							<div
+								className="grid gap-0 border-b border-primary-300 dark:border-primary-800"
+								style={{
+									gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
+								}}>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									#
 								</div>
-							);
-						})}
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 text-primary-900 dark:text-primary-100">
-							AB
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							H
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							R
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							RBI
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
-							BB
-						</div>
-						<div className="flex justify-center items-center h-8 font-mono text-xs font-bold text-primary-900 dark:text-primary-100">
-							SO
-						</div>
-					</div>
+								<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
+									BATTERS
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									POS
+								</div>
+								{inningColumns
+									.map((columnCount, inningIndex) => {
+										const inningNumber = inningIndex + 1;
+										const isLastInning = inningIndex === inningColumns.length - 1;
+
+										return Array.from({ length: columnCount }, (_, columnIndex) => {
+											const isSecondColumn = columnIndex === 1;
+											const isLastColumnOfInning = columnIndex === columnCount - 1;
+
+											return (
+												<div
+													key={`${inningNumber}-${columnIndex}`}
+													className={`flex justify-center items-center h-8 text-xs font-bold text-primary-900 dark:text-primary-100 ${
+														isLastColumnOfInning && isLastInning
+															? 'border-primary-200 dark:border-primary-700'
+															: 'border-r border-primary-200 dark:border-primary-700'
+													}`}>
+													{isSecondColumn ? `${inningNumber}b` : inningNumber}
+												</div>
+											);
+										});
+									})
+									.flat()}
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 text-primary-900 dark:text-primary-100">
+									AB
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									H
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									R
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									RBI
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+									BB
+								</div>
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold text-primary-900 dark:text-primary-100">
+									SO
+								</div>
+							</div>
+						);
+					})()}
 
 					{/* Home Team Batters */}
-					{detailedData.batters.home.map((batter, index) => (
-						<BatterRow
-							key={index}
-							batter={batter}
-							index={index}
-							displayInnings={displayInnings}
-							isAway={false}
-							isLastRow={index === detailedData.batters.home.length - 1}
-							detailedData={detailedData}
-						/>
-					))}
+					{(() => {
+						const { inningColumns } = getInningColumnStructure(detailedData.batters.home, displayInnings, detailedData);
+						return detailedData.batters.home.map((batter, index) => (
+							<BatterRow
+								key={index}
+								batter={batter}
+								index={index}
+								displayInnings={displayInnings}
+								isAway={false}
+								isLastRow={index === detailedData.batters.home.length - 1}
+								detailedData={detailedData}
+								inningColumns={inningColumns}
+							/>
+						));
+					})()}
 
 					{/* Home Team Batters Summary Row */}
-					<div
-						className="grid gap-0 border-t border-primary-300 dark:border-primary-800"
-						style={{
-							gridTemplateColumns: `40px 200px 30px ${Array(displayInnings)
-								.fill('1fr')
-								.join(' ')} 45px 45px 45px 45px 45px 45px`,
-						}}>
-						{/* Combined first three columns */}
-						<div className="flex col-span-3 justify-end items-center px-2 h-8 font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
-							R/H/LOB/E
-						</div>
+					{(() => {
+						const { inningColumns } = getInningColumnStructure(detailedData.batters.home, displayInnings, detailedData);
+						const inningColumnTemplate = inningColumns.map((cols) => Array(cols).fill('1fr').join(' ')).join(' ');
 
-						{/* Inning columns with R/H/LOB/E totals */}
-						{Array.from({ length: displayInnings }, (_, i) => {
-							const inningRuns = detailedData.batters.home.reduce((sum, batter) => sum + (batter.runs || 0), 0);
-							const inningHits = detailedData.batters.home.reduce((sum, batter) => sum + (batter.hits || 0), 0);
-							const inningLOB = 0; // Would need to calculate from game data
-							const inningErrors = 0; // Would need to calculate from game data
-							const isLastInning = i === displayInnings - 1;
-							return (
-								<div
-									key={i}
-									className={`flex justify-center items-center h-8 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100 ${
-										isLastInning
-											? 'border-primary-200 dark:border-primary-700'
-											: 'border-r border-primary-200 dark:border-primary-700'
-									}`}>
-									{`${inningRuns}/${inningHits}/${inningLOB}/${inningErrors}`}
+						return (
+							<div
+								className="grid gap-0 border-t border-primary-300 dark:border-primary-800"
+								style={{
+									gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
+								}}>
+								{/* Combined first three columns */}
+								<div className="flex col-span-3 justify-end items-center px-2 h-8 font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
+									R/H/LOB/E
 								</div>
-							);
-						})}
 
-						{/* AB Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r border-l text-2xs text-primary-900 dark:text-primary-100 border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700">
-							{detailedData.batters.home.reduce((sum, batter) => sum + (batter.at_bats || 0), 0)}
-						</div>
+								{/* Inning columns with R/H/LOB/E totals */}
+								{inningColumns
+									.map((columnCount, inningIndex) => {
+										const inningNumber = inningIndex + 1;
+										const isLastInning = inningIndex === inningColumns.length - 1;
 
-						{/* H Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-							{detailedData.batters.home.reduce((sum, batter) => sum + (batter.hits || 0), 0)}
-						</div>
+										// Only show stats in the first column of each inning (not in Xb columns)
+										return Array.from({ length: columnCount }, (_, columnIndex) => {
+											const isFirstColumn = columnIndex === 0;
+											const isLastColumnOfInning = columnIndex === columnCount - 1;
 
-						{/* R Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-							{detailedData.batters.home.reduce((sum, batter) => sum + (batter.runs || 0), 0)}
-						</div>
+											const inningRuns = detailedData.batters.home.reduce((sum, batter) => sum + (batter.runs || 0), 0);
+											const inningHits = detailedData.batters.home.reduce((sum, batter) => sum + (batter.hits || 0), 0);
+											const inningLOB = 0; // Would need to calculate from game data
+											const inningErrors = 0; // Would need to calculate from game data
 
-						{/* RBI Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-							{detailedData.batters.home.reduce((sum, batter) => sum + (batter.rbi || 0), 0)}
-						</div>
+											return (
+												<div
+													key={`${inningNumber}-${columnIndex}`}
+													className={`flex justify-center items-center h-8 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100 ${
+														isLastColumnOfInning && isLastInning
+															? 'border-primary-200 dark:border-primary-700'
+															: 'border-r border-primary-200 dark:border-primary-700'
+													}`}>
+													{isFirstColumn ? `${inningRuns}/${inningHits}/${inningLOB}/${inningErrors}` : ''}
+												</div>
+											);
+										});
+									})
+									.flat()}
+								{/* AB Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r border-l text-2xs text-primary-900 dark:text-primary-100 border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700">
+									{detailedData.batters.home.reduce((sum, batter) => sum + (batter.at_bats || 0), 0)}
+								</div>
 
-						{/* BB Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-							{detailedData.batters.home.reduce((sum, batter) => sum + (batter.walks || 0), 0)}
-						</div>
+								{/* H Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{detailedData.batters.home.reduce((sum, batter) => sum + (batter.hits || 0), 0)}
+								</div>
 
-						{/* SO Total */}
-						<div className="flex justify-center items-center h-8 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
-							{detailedData.batters.home.reduce((sum, batter) => sum + (batter.strikeouts || 0), 0)}
-						</div>
-					</div>
+								{/* R Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{detailedData.batters.home.reduce((sum, batter) => sum + (batter.runs || 0), 0)}
+								</div>
+
+								{/* RBI Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{detailedData.batters.home.reduce((sum, batter) => sum + (batter.rbi || 0), 0)}
+								</div>
+
+								{/* BB Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+									{detailedData.batters.home.reduce((sum, batter) => sum + (batter.walks || 0), 0)}
+								</div>
+
+								{/* SO Total */}
+								<div className="flex justify-center items-center h-8 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
+									{detailedData.batters.home.reduce((sum, batter) => sum + (batter.strikeouts || 0), 0)}
+								</div>
+							</div>
+						);
+					})()}
 				</div>
 
 				{/* Home Team Pitcher Table */}
