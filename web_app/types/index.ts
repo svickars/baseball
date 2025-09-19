@@ -69,9 +69,10 @@ export interface GameData {
 			home: string | null;
 		};
 		play_by_play?: {
-			atBats: Map<string, any[]>;
-			substitutions: Map<string, any[]>;
-			inningResults: Map<string, any[]>;
+			atBats: { [key: string]: any[] };
+			substitutions: { [key: string]: any[] };
+			inningResults: { [key: string]: any[] };
+			errors: { [key: string]: any[] };
 		};
 		player_stats?: {
 			away: {

@@ -225,7 +225,7 @@ const getInningClass = (inning: number, game: any) => {
 	if (game.status === 'Live' || game.is_live) {
 		const currentInning = parseInt(game.inning || '1');
 		if (inning === currentInning) {
-			return 'bg-primary-200 dark:bg-primary-700 animate-pulse-slow';
+			return 'bg-primary-300 dark:bg-primary-700 animate-pulse-slow';
 		}
 	}
 	return '';

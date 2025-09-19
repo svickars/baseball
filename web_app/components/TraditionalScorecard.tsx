@@ -584,18 +584,48 @@ const getFootnoteNumber = (footnote: string): string => {
 	return Math.abs((hash % 9) + 1).toString();
 };
 
+// Helper function to get errors for a specific inning
+function getErrorsForInning(
+	inningNumber: number,
+	halfInning: 'top' | 'bottom',
+	detailedData: DetailedGameData | null
+): number {
+	// First try to get errors from play-by-play data
+	if (detailedData && detailedData.play_by_play && detailedData.play_by_play.errors) {
+		const errorKey = `${inningNumber}-${halfInning}`;
+		const inningErrors = detailedData.play_by_play.errors[errorKey] || [];
+		if (inningErrors.length > 0) {
+			return inningErrors.length;
+		}
+	}
+
+	// Fallback: try to get errors from linescore data if available
+	if (detailedData && detailedData.linescore && detailedData.linescore.innings) {
+		const inning = detailedData.linescore.innings.find((inning: any) => inning.num === inningNumber);
+		if (inning) {
+			if (halfInning === 'top') {
+				return inning.away?.errors || 0;
+			} else {
+				return inning.home?.errors || 0;
+			}
+		}
+	}
+
+	return 0;
+}
+
 // Helper function to get at-bat results for a specific inning and batter
 const getAtBatResultsForInning = (
 	batter: BatterData,
 	inningNumber: number,
 	detailedData: DetailedGameData | null
-): Array<{ atBatResult: string; endedInning: boolean }> => {
+): Array<{ atBatResult: string; endedInning: boolean; rbis: number }> => {
 	if (!detailedData || !detailedData.play_by_play) {
 		return [];
 	}
 
 	const playByPlay = detailedData.play_by_play;
-	const atBatResults: Array<{ atBatResult: string; endedInning: boolean }> = [];
+	const atBatResults: Array<{ atBatResult: string; endedInning: boolean; rbis: number }> = [];
 	const halfInning = batter.isAway ? 'top' : 'bottom';
 
 	// Get all players in this batting order position (including substitutes)
@@ -614,12 +644,13 @@ const getAtBatResultsForInning = (
 	allPlayersInPosition.forEach((playerName) => {
 		const atBatKey = `${playerName}-${inningNumber}-${halfInning}`;
 
-		if (playByPlay.atBats && playByPlay.atBats.has(atBatKey)) {
-			const atBats = playByPlay.atBats.get(atBatKey) || [];
-			atBats.forEach((atBat) => {
+		if (playByPlay.atBats && playByPlay.atBats[atBatKey]) {
+			const atBats = playByPlay.atBats[atBatKey] || [];
+			atBats.forEach((atBat: any) => {
 				atBatResults.push({
 					atBatResult: atBat.atBatResult || '',
 					endedInning: atBat.outs >= 3 || atBat.endedInning,
+					rbis: atBat.rbi || 0,
 				});
 			});
 		}
@@ -826,8 +857,8 @@ const BatterRow = ({
 					// Get at-bat results for this inning
 					const atBatResults = getAtBatResultsForInning(batter, inningNumber, detailedData);
 
-					// Check if any substitution occurred in this inning
-					const substitutionInThisInning = batter.substitutions?.find((sub) => sub.inning === inningNumber);
+					// Get all substitutions that occurred in this inning
+					const substitutionsInThisInning = batter.substitutions?.filter((sub) => sub.inning === inningNumber) || [];
 
 					// Render columns for this inning (1 or 2 columns)
 					return Array.from({ length: columnCount }, (_, columnIndex) => {
@@ -843,20 +874,36 @@ const BatterRow = ({
 							borderClass += ' border-r';
 						}
 
-						if (substitutionInThisInning) {
-							const substitutionType = substitutionInThisInning.substitution_type;
-							if (substitutionType === 'PH' || substitutionType === 'DEF') {
-								// Pinch hitter or defensive replacement comes in BEFORE their at-bat - left border
-								borderClass =
-									isLastColumnOfInning && isLastInning
-										? 'border-l-2 border-l-primary-900 border-primary-200 dark:border-primary-700'
-										: 'border-r border-l-2 border-l-primary-900 border-primary-200 dark:border-primary-700';
-							} else if (substitutionType === 'PR') {
-								// Pinch runner comes in AFTER the at-bat - right border
-								borderClass =
-									isLastColumnOfInning && isLastInning
-										? 'border-r-2 border-r-primary-900 border-primary-200 dark:border-primary-700'
-										: 'border-r border-r-2 border-r-primary-900 border-primary-200 dark:border-primary-700';
+						// Apply substitution borders - each player gets only ONE border where they enter
+						if (substitutionsInThisInning.length > 0) {
+							// Get the substitution for this specific column
+							const substitutionForThisColumn = substitutionsInThisInning[columnIndex];
+
+							if (substitutionForThisColumn) {
+								const substitutionType = substitutionForThisColumn.substitution_type;
+
+								// Check if this is the same player as the previous substitution
+								const isSamePlayerAsPrevious =
+									columnIndex > 0 &&
+									substitutionsInThisInning[columnIndex - 1]?.player_name === substitutionForThisColumn.player_name;
+
+								// Only apply border if this is NOT the same player as the previous column
+								if (!isSamePlayerAsPrevious) {
+									if (substitutionType === 'PH' || substitutionType === 'DEF') {
+										// Pinch hitter or defensive replacement comes in BEFORE their at-bat - left border
+										borderClass =
+											isLastColumnOfInning && isLastInning
+												? 'border-l-2 border-l-primary-900 border-primary-200 dark:border-primary-700'
+												: 'border-r border-l-2 border-l-primary-900 border-primary-200 dark:border-primary-700';
+									} else if (substitutionType === 'PR') {
+										// Pinch runner comes in AFTER the at-bat - right border
+										borderClass =
+											isLastColumnOfInning && isLastInning
+												? 'border-r-2 border-r-primary-900 border-primary-200 dark:border-primary-700'
+												: 'border-r border-r-2 border-r-primary-900 border-primary-200 dark:border-primary-700';
+									}
+								}
+								// If it's the same player, no border (they're continuing in the game)
 							}
 						}
 
@@ -870,9 +917,18 @@ const BatterRow = ({
 								key={`${inningNumber}-${columnIndex}`}
 								className={`flex justify-center items-center h-fill w-fill ${borderClass}`}>
 								{atBatResult ? (
-									<span className="font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
-										{atBatResult.atBatResult}
-									</span>
+									<div className="relative flex justify-center items-center w-full h-full">
+										<span className="font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
+											{atBatResult.atBatResult}
+										</span>
+										{atBatResult.rbis > 0 && (
+											<div className="absolute bottom-0 left-0 flex">
+												{Array.from({ length: atBatResult.rbis }, (_, i) => (
+													<div key={i} className="w-1 h-1 bg-black rounded-full mr-0.5" />
+												))}
+											</div>
+										)}
+									</div>
 								) : (
 									<span className="text-2xs text-primary-400 dark:text-primary-600"></span>
 								)}
@@ -885,68 +941,68 @@ const BatterRow = ({
 			{/* Stats Columns */}
 			<div className="flex flex-col border-r border-l border-l-primary-300 dark:border-l-primary-800 border-r-primary-200 dark:border-r-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.at_bats || 0}
+					{batter.name ? batter.at_bats ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.substitutions?.[0]?.at_bats || 0}
+					{batter.substitutions?.[0]?.player_name ? batter.substitutions[0].at_bats ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{batter.substitutions?.[1]?.at_bats || 0}
+					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].at_bats ?? 0 : ''}
 				</div>
 			</div>
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.hits || 0}
+					{batter.name ? batter.hits ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.substitutions?.[0]?.hits || 0}
+					{batter.substitutions?.[0]?.player_name ? batter.substitutions[0].hits ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{batter.substitutions?.[1]?.hits || 0}
+					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].hits ?? 0 : ''}
 				</div>
 			</div>
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.runs || 0}
+					{batter.name ? batter.runs ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.substitutions?.[0]?.runs || 0}
+					{batter.substitutions?.[0]?.player_name ? batter.substitutions[0].runs ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{batter.substitutions?.[1]?.runs || 0}
+					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].runs ?? 0 : ''}
 				</div>
 			</div>
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.rbi || 0}
+					{batter.name ? batter.rbi ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.substitutions?.[0]?.rbi || 0}
+					{batter.substitutions?.[0]?.player_name ? batter.substitutions[0].rbi ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{batter.substitutions?.[1]?.rbi || 0}
+					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].rbi ?? 0 : ''}
 				</div>
 			</div>
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.walks || 0}
+					{batter.name ? batter.walks ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.substitutions?.[0]?.walks || 0}
+					{batter.substitutions?.[0]?.player_name ? batter.substitutions[0].walks ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{batter.substitutions?.[1]?.walks || 0}
+					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].walks ?? 0 : ''}
 				</div>
 			</div>
 			<div className="flex flex-col h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.strikeouts || 0}
+					{batter.name ? batter.strikeouts ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-					{batter.substitutions?.[0]?.strikeouts || 0}
+					{batter.substitutions?.[0]?.player_name ? batter.substitutions[0].strikeouts ?? 0 : ''}
 				</div>
 				<div className="flex justify-center items-center h-6 font-mono font-medium text-2xs text-primary-900 dark:text-primary-100">
-					{batter.substitutions?.[1]?.strikeouts || 0}
+					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].strikeouts ?? 0 : ''}
 				</div>
 			</div>
 		</div>
@@ -998,9 +1054,17 @@ interface DetailedGameData {
 	total_home_runs?: number;
 	// Play-by-play data
 	play_by_play?: {
-		atBats: Map<string, any[]>;
-		substitutions: Map<string, any[]>;
-		inningResults: Map<string, any[]>;
+		atBats: { [key: string]: any[] };
+		substitutions: { [key: string]: any[] };
+		inningResults: { [key: string]: any[] };
+		errors: { [key: string]: any[] };
+	};
+	linescore?: {
+		innings: Array<{
+			num: number;
+			away?: { runs: number; hits: number; errors: number; leftOnBase: number };
+			home?: { runs: number; hits: number; errors: number; leftOnBase: number };
+		}>;
 	};
 }
 
@@ -1021,6 +1085,7 @@ interface PlateAppearance {
 	summary: string;
 	got_on_base: boolean;
 	at_bat_result: string;
+	rbis: number;
 	pitches: PitchData[];
 }
 
@@ -1287,7 +1352,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 										earned_runs: earnedRuns,
 										walks: walks,
 										strikeouts: pitcher.strikeouts || 0,
-										number: pitcher.jersey_number ? String(pitcher.jersey_number) : '0',
+										number: pitcher.number ? String(pitcher.number) : '0',
 										handedness: pitcher.handedness || 'R',
 										wls: pitcher.wls || '',
 										batters_faced: pitcher.batters_faced || 0,
@@ -1323,7 +1388,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 										earned_runs: earnedRuns,
 										walks: walks,
 										strikeouts: pitcher.strikeouts || 0,
-										number: pitcher.jersey_number ? String(pitcher.jersey_number) : '0',
+										number: pitcher.number ? String(pitcher.number) : '0',
 										handedness: pitcher.handedness || 'R',
 										wls: pitcher.wls || '',
 										batters_faced: pitcher.batters_faced || 0,
@@ -1345,7 +1410,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 				umpires: gameData.game_data.umpires || [],
 				managers: gameData.game_data.managers || { away: 'Manager A', home: 'Manager B' },
 				start_time: gameData.game_data.start_time || '7:05 PM',
-				end_time: gameData.game_data.end_time || 'Duration: 3:15',
+				end_time: gameData.game_data.end_time || undefined,
 				weather: gameData.game_data.weather || 'Clear, 72°F',
 				wind: gameData.game_data.wind || '5 mph, Out to LF',
 				uniforms: gameData.game_data.uniforms
@@ -1818,10 +1883,39 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 											const isFirstColumn = columnIndex === 0;
 											const isLastColumnOfInning = columnIndex === columnCount - 1;
 
-											const inningRuns = detailedData.batters.away.reduce((sum, batter) => sum + (batter.runs || 0), 0);
-											const inningHits = detailedData.batters.away.reduce((sum, batter) => sum + (batter.hits || 0), 0);
+											// Calculate per-inning stats for the entire inning (including "b" columns)
+											// Calculate runs by counting RBIs from all at-bat results in this inning
+											const inningRuns = detailedData.batters.away.reduce((runs, batter) => {
+												const atBats = getAtBatResultsForInning(batter, inningNumber, detailedData);
+												return runs + atBats.reduce((rbiSum, atBat) => rbiSum + atBat.rbis, 0);
+											}, 0);
+
+											// Debug logging
+											if (inningNumber <= 3) {
+												console.log(`Away Inning ${inningNumber}:`, {
+													inningRuns,
+													detailedDataInnings: detailedData.innings,
+													detailedDataKeys: Object.keys(detailedData),
+												});
+											}
+
+											// For hits, calculate from ALL at-bat results in this inning (including "b" columns)
+											const inningHits = detailedData.batters.away.reduce((hits, batter) => {
+												const atBats = getAtBatResultsForInning(batter, inningNumber, detailedData);
+												return (
+													hits +
+													atBats.filter(
+														(atBat) =>
+															atBat.atBatResult === '1B' ||
+															atBat.atBatResult === '2B' ||
+															atBat.atBatResult === '3B' ||
+															atBat.atBatResult === 'HR'
+													).length
+												);
+											}, 0);
+
 											const inningLOB = 0; // Would need to calculate from game data
-											const inningErrors = 0; // Would need to calculate from game data
+											const inningErrors = getErrorsForInning(inningNumber, 'bottom', detailedData); // Errors committed by away team (top of inning)
 
 											return (
 												<div
@@ -2091,10 +2185,39 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 											const isFirstColumn = columnIndex === 0;
 											const isLastColumnOfInning = columnIndex === columnCount - 1;
 
-											const inningRuns = detailedData.batters.home.reduce((sum, batter) => sum + (batter.runs || 0), 0);
-											const inningHits = detailedData.batters.home.reduce((sum, batter) => sum + (batter.hits || 0), 0);
+											// Calculate per-inning stats for the entire inning (including "b" columns)
+											// Calculate runs by counting RBIs from all at-bat results in this inning
+											const inningRuns = detailedData.batters.home.reduce((runs, batter) => {
+												const atBats = getAtBatResultsForInning(batter, inningNumber, detailedData);
+												return runs + atBats.reduce((rbiSum, atBat) => rbiSum + atBat.rbis, 0);
+											}, 0);
+
+											// Debug logging
+											if (inningNumber <= 3) {
+												console.log(`Home Inning ${inningNumber}:`, {
+													inningRuns,
+													detailedDataInnings: detailedData.innings,
+													detailedDataKeys: Object.keys(detailedData),
+												});
+											}
+
+											// For hits, calculate from ALL at-bat results in this inning (including "b" columns)
+											const inningHits = detailedData.batters.home.reduce((hits, batter) => {
+												const atBats = getAtBatResultsForInning(batter, inningNumber, detailedData);
+												return (
+													hits +
+													atBats.filter(
+														(atBat) =>
+															atBat.atBatResult === '1B' ||
+															atBat.atBatResult === '2B' ||
+															atBat.atBatResult === '3B' ||
+															atBat.atBatResult === 'HR'
+													).length
+												);
+											}, 0);
+
 											const inningLOB = 0; // Would need to calculate from game data
-											const inningErrors = 0; // Would need to calculate from game data
+											const inningErrors = getErrorsForInning(inningNumber, 'top', detailedData); // Errors committed by home team (bottom of inning)
 
 											return (
 												<div
