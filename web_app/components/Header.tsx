@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatDateInTimezone, getTodayLocalDate } from '@/lib/utils';
 import ThemeToggle from './ThemeToggle';
+import ResponsiveLogo from './ResponsiveLogo';
 
 interface HeaderProps {
 	onLoadGames: (date: string) => void;
@@ -61,11 +62,7 @@ export default function Header({ onLoadGames, isLoading, onNavigateToGames, sele
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 				<div className="flex justify-between items-center py-6">
 					<Link href="/" className="hover:opacity-80 transition-opacity">
-						<img
-							src="/images/caughtlooking.svg"
-							alt="Caught Looking - Baseball Scorecard Viewer"
-							className="h-10 w-auto logo-svg"
-						/>
+						<ResponsiveLogo />
 					</Link>
 
 					<div className="flex items-center gap-4">

@@ -584,6 +584,222 @@ const getFootnoteNumber = (footnote: string): string => {
 	return Math.abs((hash % 9) + 1).toString();
 };
 
+// Helper function to determine base advancement from at-bat result
+const getBaseAdvancement = (
+	atBatResult: string
+): { first: boolean; second: boolean; third: boolean; home: boolean } => {
+	const result = atBatResult.toUpperCase();
+
+	// Default: no advancement
+	let first = false;
+	let second = false;
+	let third = false;
+	let home = false;
+
+	// Hits that reach first base
+	if (result.includes('1B') || result.includes('SINGLE')) {
+		first = true;
+	}
+	// Hits that reach second base
+	else if (result.includes('2B') || result.includes('DOUBLE') || result.includes('GROUND-RULE')) {
+		first = true;
+		second = true;
+	}
+	// Hits that reach third base
+	else if (result.includes('3B') || result.includes('TRIPLE')) {
+		first = true;
+		second = true;
+		third = true;
+	}
+	// Hits that reach home (home runs)
+	else if (result.includes('HR') || result.includes('HOME RUN')) {
+		first = true;
+		second = true;
+		third = true;
+		home = true;
+	}
+	// Walks and other ways to reach first base
+	else if (
+		result.includes('BB') ||
+		result.includes('WALK') ||
+		result.includes('HBP') ||
+		result.includes('HIT BY PITCH') ||
+		result.includes('ERROR') ||
+		result.includes('E') ||
+		result.includes("FIELDER'S CHOICE") ||
+		result.includes('FC') ||
+		result.includes('INTERFERENCE') ||
+		result.includes('DROPPED THIRD STRIKE') ||
+		result.includes("CATCHER'S INTERFERENCE")
+	) {
+		first = true;
+	}
+
+	return { first, second, third, home };
+};
+
+// Helper function to get corner label text based on at-bat result
+const getCornerLabels = (atBatResult: string): { first: string; second: string; third: string; home: string } => {
+	const result = atBatResult.toUpperCase();
+
+	// Default: no labels
+	let first = '';
+	let second = '';
+	let third = '';
+	let home = '';
+
+	// Hits that reach first base
+	if (result.includes('1B') || result.includes('SINGLE')) {
+		first = '1B';
+	}
+	// Hits that reach second base - only label second base
+	else if (result.includes('2B') || result.includes('DOUBLE') || result.includes('GROUND-RULE')) {
+		second = '2B';
+	}
+	// Hits that reach third base - only label third base
+	else if (result.includes('3B') || result.includes('TRIPLE')) {
+		third = '3B';
+	}
+	// Walks and other ways to reach first base
+	else if (result.includes('BB') || result.includes('WALK')) {
+		first = 'BB';
+	} else if (result.includes('HBP') || result.includes('HIT BY PITCH')) {
+		first = 'HBP';
+	} else if (result.includes('ERROR') || result.includes('E')) {
+		first = 'E';
+	} else if (result.includes("FIELDER'S CHOICE") || result.includes('FC')) {
+		first = 'FC';
+	} else if (result.includes('INTERFERENCE') || result.includes("CATCHER'S INTERFERENCE")) {
+		first = 'CI';
+	} else if (result.includes('DROPPED THIRD STRIKE')) {
+		first = 'K+';
+	}
+
+	return { first, second, third, home };
+};
+
+// Helper function to determine if we should use center text instead of corner labels
+const shouldUseCenterText = (atBatResult: string): boolean => {
+	const result = atBatResult.toUpperCase();
+
+	// Use center text for home runs, strikeouts, and all types of outs
+	return (
+		result.includes('HR') ||
+		result.includes('HOME RUN') ||
+		result.includes('K') ||
+		result.includes('STRIKEOUT') ||
+		// Shorthand notation for outs (letter followed by number)
+		!!result.match(/^G\d+$/) || // Groundouts: G1, G3, G43, etc.
+		!!result.match(/^F\d+$/) || // Flyouts: F1, F7, F9, etc.
+		!!result.match(/^L\d+$/) || // Lineouts: L2, L7, L1, etc.
+		!!result.match(/^P\d+$/) || // Popouts: P5, P1, P2, etc.
+		result.includes('OUT') ||
+		result.includes('GROUNDOUT') ||
+		result.includes('FLYOUT') ||
+		result.includes('LINEOUT') ||
+		result.includes('POPOUT') ||
+		result.includes('POP OUT') ||
+		result.includes('GROUND OUT') ||
+		result.includes('FLY OUT') ||
+		result.includes('LINE OUT') ||
+		result.includes('GO') ||
+		result.includes('FO') ||
+		result.includes('LO') ||
+		result.includes('PO') ||
+		result.includes('DP') ||
+		result.includes('TP') ||
+		result.includes('SF') ||
+		result.includes('SH') ||
+		result.includes('SAC') ||
+		result.includes('SAC FLY') ||
+		result.includes('SACRIFICE FLY') ||
+		result.includes('SACRIFICE HIT') ||
+		result.includes('SACRIFICE') ||
+		result.includes('DOUBLE PLAY') ||
+		result.includes('TRIPLE PLAY') ||
+		result.includes("FIELDER'S CHOICE OUT") ||
+		result.includes('FC OUT') ||
+		result.includes('UNASSISTED') ||
+		result.includes('FORCE OUT') ||
+		result.includes('FIELD OUT')
+	);
+};
+
+// Helper function to render diamond grid with base advancement coloring and corner labels
+const renderDiamondGrid = (atBatResult?: string) => {
+	const advancement = atBatResult
+		? getBaseAdvancement(atBatResult)
+		: { first: false, second: false, third: false, home: false };
+
+	const cornerLabels = atBatResult ? getCornerLabels(atBatResult) : { first: '', second: '', third: '', home: '' };
+	const useCenterText = atBatResult ? shouldUseCenterText(atBatResult) : false;
+
+	// Base positions in the diamond (rotated 45 degrees):
+	// Right = First Base, Top = Second Base, Left = Third Base, Bottom = Home Plate
+	return (
+		<div className="absolute inset-0 flex justify-center items-center">
+			<div className="relative w-6 h-6">
+				{/* Diamond grid */}
+				<div className="rotate-45 grid grid-cols-2 gap-px w-6 h-6">
+					{/* Top Left = Second Base */}
+					<div
+						className={`w-2.5 h-2.5 ${
+							advancement.second ? 'bg-primary-600 dark:bg-primary-500' : 'bg-primary-200 dark:bg-primary-700'
+						}`}></div>
+					{/* Top Right = First Base */}
+					<div
+						className={`w-2.5 h-2.5 ${
+							advancement.first ? 'bg-primary-600 dark:bg-primary-500' : 'bg-primary-200 dark:bg-primary-700'
+						}`}></div>
+					{/* Bottom Left = Third Base */}
+					<div
+						className={`w-2.5 h-2.5 ${
+							advancement.third ? 'bg-primary-600 dark:bg-primary-500' : 'bg-primary-200 dark:bg-primary-700'
+						}`}></div>
+					{/* Bottom Right = Home Plate */}
+					<div
+						className={`w-2.5 h-2.5 ${
+							advancement.home ? 'bg-primary-600 dark:bg-primary-500' : 'bg-primary-200 dark:bg-primary-700'
+						}`}></div>
+				</div>
+
+				{/* Corner labels - only show if not using center text */}
+				{!useCenterText && (
+					<>
+						{/* Bottom Right = First Base Label */}
+						{cornerLabels.first && (
+							<div className="absolute -bottom-2 -right-2 text-2xs font-mono font-bold text-primary-900 dark:text-primary-100">
+								{cornerLabels.first}
+							</div>
+						)}
+
+						{/* Top Right = Second Base Label */}
+						{cornerLabels.second && (
+							<div className="absolute -top-2 -right-2 text-2xs font-mono font-bold text-primary-900 dark:text-primary-100">
+								{cornerLabels.second}
+							</div>
+						)}
+
+						{/* Top Left = Third Base Label */}
+						{cornerLabels.third && (
+							<div className="absolute -top-2 -left-2 text-2xs font-mono font-bold text-primary-900 dark:text-primary-100">
+								{cornerLabels.third}
+							</div>
+						)}
+
+						{/* Bottom Left = Home Plate Label */}
+						{cornerLabels.home && (
+							<div className="absolute -bottom-2 -left-2 text-2xs font-mono font-bold text-primary-900 dark:text-primary-100">
+								{cornerLabels.home}
+							</div>
+						)}
+					</>
+				)}
+			</div>
+		</div>
+	);
+};
+
 // Helper function to get errors for a specific inning
 function getErrorsForInning(
 	inningNumber: number,
@@ -915,11 +1131,19 @@ const BatterRow = ({
 						return (
 							<div
 								key={`${inningNumber}-${columnIndex}`}
-								className={`flex justify-center items-center h-fill w-fill ${borderClass}`}>
+								className={`relative flex justify-center items-center h-fill w-fill ${borderClass}`}>
+								{/* Diamond grid background - only show when there's at-bat data */}
+								{atBatResult && renderDiamondGrid(atBatResult.atBatResult)}
+
 								{atBatResult ? (
-									<div className="relative flex justify-center items-center w-full h-full">
-										<span className="font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
-											{atBatResult.atBatResult}
+									<div className="relative flex justify-center items-center w-full h-full z-10">
+										<span
+											className={`font-mono font-bold text-sm text-primary-900 dark:text-primary-100 ${
+												shouldUseCenterText(atBatResult.atBatResult)
+													? '[text-shadow:1px_1px_0_white,-1px_-1px_0_white,1px_-1px_0_white,-1px_1px_0_white] dark:[text-shadow:1px_1px_0_rgb(30_41_59),-1px_-1px_0_rgb(30_41_59),1px_-1px_0_rgb(30_41_59),-1px_1px_0_rgb(30_41_59)]'
+													: ''
+											}`}>
+											{shouldUseCenterText(atBatResult.atBatResult) ? atBatResult.atBatResult : ''}
 										</span>
 										{atBatResult.rbis > 0 && (
 											<div className="absolute bottom-0 left-0 flex">
@@ -930,7 +1154,9 @@ const BatterRow = ({
 										)}
 									</div>
 								) : (
-									<span className="text-2xs text-primary-400 dark:text-primary-600"></span>
+									<div className="relative w-full h-full z-10">
+										<span className="text-2xs text-primary-400 dark:text-primary-600"></span>
+									</div>
 								)}
 							</div>
 						);
