@@ -75,6 +75,12 @@ const getTeamName = (fullTeamName: string) => {
 // Helper function to format game time
 const formatGameTime = (startTime: string) => {
 	try {
+		// If startTime is already a formatted time string (like "4:07 PM"), return it as-is
+		if (startTime.includes('AM') || startTime.includes('PM') || startTime.includes(':')) {
+			return startTime;
+		}
+
+		// If it's an ISO date string, parse and format it
 		const date = new Date(startTime);
 		return date.toLocaleTimeString('en-US', {
 			hour: 'numeric',

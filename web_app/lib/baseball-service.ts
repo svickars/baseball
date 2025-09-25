@@ -903,7 +903,10 @@ async function extractUniforms(
 function extractStartTime(gameFeedData: any): string | null {
 	if (gameFeedData.gameData?.game?.gameDate) {
 		try {
+			// Parse the date string - MLB API provides times in the venue's local timezone
 			const gameDate = new Date(gameFeedData.gameData.game.gameDate);
+
+			// Format in user's local timezone (browser will handle the conversion)
 			return gameDate.toLocaleTimeString('en-US', {
 				hour: 'numeric',
 				minute: '2-digit',
@@ -1698,14 +1701,16 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 				const gameDetails = gameData.game || {};
 				const status = gameData.status || {};
 
-				// Format start time
+				// Format start time - MLB API provides gameDate in ISO format
 				let startTime = gameData.gameDate || '';
 				if (startTime) {
 					try {
 						const dt = new Date(startTime);
+						// Format in user's local timezone
 						startTime = dt.toLocaleTimeString('en-US', {
 							hour: 'numeric',
 							minute: '2-digit',
+							hour12: true,
 						});
 					} catch (e) {
 						// Keep original format if parsing fails
