@@ -344,7 +344,7 @@ const getBaseSquareColor = (basePathViz: BasePathVisualization, basePosition: st
 
 		if (scoringMovement) {
 			// Build the complete continuous movement sequence for this scoring play
-			const continuousSequence = [];
+			const continuousSequence: BaseRunningMovement[] = [];
 
 			// Start from the scoring movement and work backwards to find ALL consecutive movements from the same at-bat
 			let currentMovement = scoringMovement;
@@ -460,7 +460,7 @@ const renderMovementLabels = (basePathViz: BasePathVisualization) => {
 	};
 
 	// Consolidate consecutive movements from the same at-bat (same play)
-	const consolidatedMovements: any[] = [];
+	const consolidatedMovements: BaseRunningMovement[] = [];
 
 	for (let i = 0; i < basePathViz.path.length; i++) {
 		const currentMovement = basePathViz.path[i];
@@ -733,7 +733,7 @@ const AtBatTooltip = ({
 				<div className="pt-2 border-t border-gray-600 dark:border-gray-400">
 					{(() => {
 						// Consolidate consecutive movements from the same at-bat
-						const consolidatedMovements: any[] = [];
+						const consolidatedMovements: BaseRunningMovement[] = [];
 
 						for (let i = 0; i < baseRunningTrip.basePath.length; i++) {
 							const currentMovement = baseRunningTrip.basePath[i];
@@ -1293,6 +1293,7 @@ interface BaseRunningMovement {
 	batterName?: string;
 	isInitialAtBat?: boolean;
 	isPinchRunner?: boolean;
+	isPinchRunnerMovement?: boolean;
 }
 
 interface BaseRunningTrip {

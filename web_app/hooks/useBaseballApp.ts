@@ -107,8 +107,8 @@ export function useBaseballApp() {
 				startLiveDataCollection(gameId);
 
 				// Log gamePk if available in the game data
-				if (response.game_data && response.game_data.game_pk) {
-					console.log('🎮 Game loaded via useBaseballApp - gamePk:', response.game_data.game_pk);
+				if (response.game && response.game.game_pk) {
+					console.log('🎮 Game loaded via useBaseballApp - gamePk:', response.game.game_pk);
 				}
 			} else {
 				throw new Error('Failed to load game');

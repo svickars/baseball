@@ -32,6 +32,7 @@ export interface Game {
 
 export interface GameData {
 	game_id: string;
+	game?: Game;
 	game_data: {
 		away_team: {
 			name: string;
