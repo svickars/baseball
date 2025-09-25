@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGameDetailsSimple } from '@/lib/baseball-service';
+import { getGameDetails } from '@/lib/baseball-service';
 
 export async function GET(request: NextRequest, { params }: { params: { gameId: string } }) {
 	try {
@@ -11,12 +11,13 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 			return NextResponse.json({ error: 'Invalid game ID format', success: false }, { status: 400 });
 		}
 
-		const gameData = await getGameDetailsSimple(gameId);
+		const gameData = await getGameDetails(gameId);
 
 		return NextResponse.json({
 			game_id: gameId,
 			game: gameData.game_data, // Include basic game data for compatibility
 			game_data: gameData.game_data,
+			liveData: gameData.liveData, // Include liveData for basepath tracking
 			svg_content: gameData.svg_content,
 			success: true,
 		});

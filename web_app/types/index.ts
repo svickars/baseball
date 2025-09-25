@@ -135,6 +135,7 @@ export interface GameData {
 		};
 		liveData?: any;
 	};
+	liveData?: any;
 	svg_content: string;
 	success: boolean;
 }

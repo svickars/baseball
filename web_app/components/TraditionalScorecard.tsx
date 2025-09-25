@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { GameData } from '@/types';
 import LoadingSpinner from './LoadingSpinner';
 import * as TeamLogos from './team-logos';
-import { getGameDetails } from '@/lib/baseball-service';
+import { baseballApi } from '@/lib/api';
 import { ArrowRight, X } from 'lucide-react';
 
 // Movement color variables for accessibility in both light and dark modes
@@ -4361,8 +4361,16 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 	const fetchDetailedData = useCallback(async () => {
 		setLoading(true);
 		try {
-			// Fetch detailed game data from the MLB API
-			const detailedGameData = await getGameDetails(gameId);
+			// Fetch detailed game data from the API route (avoids CORS issues)
+			const response = await baseballApi.getGameDetails(gameId);
+			console.log('API Response:', response);
+
+			// Check if the API call was successful
+			if (!(response as any).success) {
+				throw new Error((response as any).error || 'Failed to load game data');
+			}
+
+			const detailedGameData = response;
 
 			// Transform the detailed GameData to DetailedGameData format
 			const transformedData: DetailedGameData = {
@@ -4524,16 +4532,13 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 				total_home_runs: gameData.game_data.total_home_runs,
 				play_by_play: detailedGameData.game_data.play_by_play || undefined,
 				// Include the liveData from the game feed for base running tracking
-				liveData: (() => {
-					// liveData is at the top level of detailedGameData, not inside game_data
-					const liveData = (detailedGameData as any).liveData;
-
-					return liveData;
-				})(),
+				liveData: (detailedGameData as any).liveData,
 			};
 
 			setDetailedData(transformedData);
 		} catch (error) {
+			console.error('Error loading detailed game data:', error);
+			// You might want to set an error state here or show a user-friendly message
 		} finally {
 			setLoading(false);
 		}
@@ -4822,7 +4827,9 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 	);
 
 	const renderScorecardGrid = useCallback(() => {
-		if (!detailedData) return null;
+		if (!detailedData) {
+			return null;
+		}
 
 		// Only show extra innings if there's actual data for them
 		const inningsWithData = detailedData.innings.map((i) => i.inning);
