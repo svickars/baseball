@@ -243,6 +243,12 @@ If deployment fails due to TypeScript errors:
 - **Fix**: Provide complete object structure with all required properties
 - **Example**: `detailedData.play_by_play = { atBats: {}, substitutions: {}, inningResults: {}, errors: {} };`
 
+### "Parameter 'paramName' implicitly has an 'any' type"
+
+- **Cause**: Function parameters without explicit type annotations
+- **Fix**: Add explicit type annotations to parameters
+- **Example**: `allPlays.map((play: any) => ({ ... }))`
+
 ---
 
 **Remember**: These issues are recurring patterns. Always check these specific patterns before deploying to avoid repeated deployment failures.

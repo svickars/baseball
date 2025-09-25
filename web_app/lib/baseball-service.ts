@@ -3636,7 +3636,7 @@ function extractSubstitutionEventsFromGameFeed(gameFeedData: any): any[] {
 	// Debug: Let's examine the structure of a few plays to understand the format
 	console.log(
 		'DEBUG: Sample play structure:',
-		allPlays.slice(0, 2).map((play) => ({
+		allPlays.slice(0, 2).map((play: any) => ({
 			hasRunners: !!play.runners,
 			runnersLength: play.runners?.length || 0,
 			hasActions: !!play.actions,
