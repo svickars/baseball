@@ -74,6 +74,18 @@ export interface GameData {
 			inningResults: { [key: string]: any[] };
 			errors: { [key: string]: any[] };
 		};
+		game_feed_substitutions?: Array<{
+			substitutingPlayer: string;
+			replacedPlayer: string;
+			type: string;
+			position: string;
+			battingOrder?: number;
+			inning: number;
+			halfInning: string;
+			description: string;
+			eventType: string;
+			chronologicalOrder: number;
+		}>;
 		player_stats?: {
 			away: {
 				batters: Array<{

@@ -11,7 +11,7 @@ export { default as CLE } from './cle';
 export { default as COL } from './col';
 export { default as DET } from './det';
 export { default as HOU } from './hou';
-export { default as KAN } from './kan';
+export { default as KC } from './kc';
 export { default as LAA } from './laa';
 export { default as LAD } from './lad';
 export { default as MIA } from './mia';
