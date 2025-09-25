@@ -71,8 +71,6 @@ class OptimizedApiClient {
 				const requestId = (response.config as any).requestId;
 				const startTime = this.requestTimings.get(requestId);
 				if (startTime) {
-					const duration = Date.now() - startTime;
-					console.log(`API Response: ${response.config.url} - ${duration}ms`);
 					this.requestTimings.delete(requestId);
 				}
 				return response;
@@ -112,8 +110,6 @@ class OptimizedApiClient {
 
 		// Exponential backoff
 		const delay = this.retryConfig.retryDelay * Math.pow(2, config.__retryCount - 1);
-
-		console.log(`Retrying request ${config.url} (attempt ${config.__retryCount}) in ${delay}ms`);
 
 		await new Promise((resolve) => setTimeout(resolve, delay));
 

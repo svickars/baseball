@@ -22,7 +22,6 @@ class PerformanceDiagnostic {
 	end(name: string): number {
 		const startTime = this.timers.get(name);
 		if (!startTime) {
-			console.warn(`Performance timer '${name}' was not started`);
 			return 0;
 		}
 
@@ -80,8 +79,6 @@ class PerformanceDiagnostic {
 			acc[metric.name].min = Math.min(acc[metric.name].min, metric.duration);
 			return acc;
 		}, {} as Record<string, { count: number; total: number; max: number; min: number }>);
-
-		console.log('Performance Summary:', summary);
 	}
 }
 

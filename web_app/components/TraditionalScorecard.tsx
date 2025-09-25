@@ -197,6 +197,11 @@ const getMovementShorthand = (event: string, isOut: boolean = false, description
 		return 'SAC';
 	}
 
+	// Double plays - show "DP" for quadrant labels
+	if (eventLower.includes('double play') || eventLower.includes('grounded into dp')) {
+		return 'DP';
+	}
+
 	// Try to parse defensive notation from description first
 	if (description) {
 		const defensiveNotation = parseDefensiveNotation(description);
@@ -232,6 +237,12 @@ const getMovementShorthand = (event: string, isOut: boolean = false, description
 
 // Function to get base square color for diamond grid
 const getBaseSquareColor = (basePathViz: BasePathVisualization, basePosition: string): string => {
+	// FIRST: Check if player was out at this specific base - this takes priority
+	const wasOutAtThisBase = basePathViz.path.some((movement) => movement.isOut && movement.outBase === basePosition);
+	if (wasOutAtThisBase) {
+		return BASE_PATH_COLORS.out; // Orange for outs
+	}
+
 	// Define base order for calculating intermediate bases
 	const baseOrder = ['Home', '1B', '2B', '3B', 'Home'];
 
@@ -314,10 +325,86 @@ const getBaseSquareColor = (basePathViz: BasePathVisualization, basePosition: st
 		return BASE_PATH_COLORS.score;
 	}
 
-	// Special case: Final base and out
-	const isFinalBase = basePosition === basePathViz.finalBase;
-	if (isFinalBase && basePathViz.isOut) {
-		return BASE_PATH_COLORS.out;
+	// Special case: If player scored on a subsequent play, color bases green ONLY if they're part of a continuous multi-base movement
+	if (basePathViz.isScored && !reachedInInitialAtBat) {
+		// Find the movement that directly led to scoring AND is relevant to this base
+		const scoringMovement = basePathViz.path.find((movement) => {
+			if (movement.to !== 'score' && movement.to !== 'Home') return false;
+
+			// Check if this scoring movement is relevant to the base we're coloring
+			const movementToIndex = movement.to === 'score' ? 4 : baseOrder.indexOf(movement.to);
+			const movementFromIndex = baseOrder.indexOf(movement.from);
+
+			// Check if this base is in the range of this movement
+			const minIndex = Math.min(movementFromIndex, movementToIndex);
+			const maxIndex = Math.max(movementFromIndex, movementToIndex);
+
+			return baseIndex >= minIndex && baseIndex <= maxIndex;
+		});
+
+		if (scoringMovement) {
+			// Build the complete continuous movement sequence for this scoring play
+			const continuousSequence = [];
+
+			// Start from the scoring movement and work backwards to find ALL consecutive movements from the same at-bat
+			let currentMovement = scoringMovement;
+			continuousSequence.push(currentMovement);
+
+			// Keep looking backwards for consecutive movements from the same at-bat
+			let foundPrevious = true;
+			while (foundPrevious) {
+				foundPrevious = false;
+				const prevMovement = basePathViz.path.find(
+					(movement) =>
+						movement.to === currentMovement.from &&
+						movement.atBatIndex === currentMovement.atBatIndex &&
+						!movement.event.toLowerCase().includes('stolen') &&
+						!continuousSequence.includes(movement) // Don't include the same movement twice
+				);
+
+				if (prevMovement) {
+					continuousSequence.unshift(prevMovement); // Add to beginning
+					currentMovement = prevMovement;
+					foundPrevious = true;
+				}
+			}
+
+			// Only color bases green if they're part of a TRUE continuous multi-base movement
+			// This means the sequence must span multiple bases in a single play
+			const hasMultiBaseMovement = continuousSequence.some((movement, index) => {
+				if (index === 0) return false; // Skip first movement
+				const prevMovement = continuousSequence[index - 1];
+				const fromIndex = baseOrder.indexOf(prevMovement.from);
+				const toIndex = movement.to === 'score' ? 4 : baseOrder.indexOf(movement.to);
+				return Math.abs(toIndex - fromIndex) > 1; // True multi-base movement
+			});
+
+			if (hasMultiBaseMovement) {
+				// Check if this base was part of the continuous sequence
+				const wasPartOfContinuousSequence = continuousSequence.some((movement) => {
+					const movementToIndex = movement.to === 'score' ? 4 : baseOrder.indexOf(movement.to);
+					const fromIndex = baseOrder.indexOf(movement.from);
+
+					// Direct movement to this base
+					if (movementToIndex === baseIndex) {
+						return true;
+					}
+
+					// Intermediate base in a multi-base movement
+					if (fromIndex !== -1 && movementToIndex !== -1 && baseIndex !== -1) {
+						const minIndex = Math.min(fromIndex, movementToIndex);
+						const maxIndex = Math.max(fromIndex, movementToIndex);
+						return baseIndex >= minIndex && baseIndex <= maxIndex;
+					}
+
+					return false;
+				});
+
+				if (wasPartOfContinuousSequence) {
+					return BASE_PATH_COLORS.score; // Green for bases involved in continuous multi-base scoring
+				}
+			}
+		}
 	}
 
 	// Initial at-bat bases (including home runs) - bg-primary-900 overrides everything
@@ -343,26 +430,30 @@ const renderMovementLabels = (basePathViz: BasePathVisualization) => {
 		if (base === '1B') {
 			return {
 				position: 'bottom-right', // 1st base (bottom-right in rotated grid)
-				alignment: 'text-left', // left-aligned
-				className: '-bottom-2 -right-2',
+				alignment: 'text-center', // center-aligned
+				// className: '-bottom-1 -right-1', // Fine-tuned positioning
+				className: 'top-1/2 left-full -translate-y-1/2 -rotate-90',
 			};
 		} else if (base === '2B') {
 			return {
 				position: 'top-right', // 2nd base (top-right in rotated grid)
-				alignment: 'text-left', // left-aligned
-				className: '-top-2 -right-2',
+				alignment: 'text-center', // center-aligned
+				// className: '-top-1 -right-1', // Fine-tuned positioning
+				className: 'bottom-full left-1/2 -translate-x-1/2',
 			};
 		} else if (base === '3B') {
 			return {
 				position: 'top-left', // 3rd base (top-left in rotated grid)
-				alignment: 'text-right', // right-aligned
-				className: '-top-2 -left-2',
+				alignment: 'text-center', // center-aligned
+				// className: '-top-1 -left-1', // Fine-tuned positioning
+				className: 'right-full top-1/2 -translate-y-1/2 -rotate-90',
 			};
 		} else if (base === 'Home' || base === 'score') {
 			return {
 				position: 'bottom-left', // Home plate (bottom-left in rotated grid)
-				alignment: 'text-right', // right-aligned
-				className: '-bottom-2 -left-2',
+				alignment: 'text-center', // center-aligned
+				// className: '-bottom-1 -left-1', // Fine-tuned positioning
+				className: 'top-full left-1/2 -translate-x-1/2',
 			};
 		}
 		return null;
@@ -382,9 +473,12 @@ const renderMovementLabels = (basePathViz: BasePathVisualization) => {
 			const nextMovement = basePathViz.path[j];
 
 			// If it's the same at-bat and same player, consolidate
+			// BUT don't consolidate stolen bases - they should be treated as separate plays
 			if (
 				nextMovement.atBatIndex === currentMovement.atBatIndex &&
-				nextMovement.playerId === currentMovement.playerId
+				nextMovement.playerId === currentMovement.playerId &&
+				!currentMovement.event.toLowerCase().includes('stolen') &&
+				!nextMovement.event.toLowerCase().includes('stolen')
 			) {
 				finalMovement = nextMovement;
 				j++;
@@ -403,14 +497,26 @@ const renderMovementLabels = (basePathViz: BasePathVisualization) => {
 			{consolidatedMovements.map((movement, index) => {
 				// Generate shorthand for quadrant labels using the original event and description
 				const shorthand = getMovementShorthand(movement.event, movement.isOut, movement.description);
-				const positionInfo = getBasePositionAndAlignment(movement.to);
+
+				// For out movements, use outBase if to is null
+				const targetBase = movement.isOut && movement.outBase ? movement.outBase : movement.to;
+				const positionInfo = getBasePositionAndAlignment(targetBase);
 
 				if (!positionInfo) return null;
+
+				// Use orange text for out movements, default color for advances
+				const textColorClass = movement.isOut
+					? 'text-orange-600 dark:text-orange-400'
+					: 'text-primary-900 dark:text-primary-100';
+
+				// Use regular weight for out movements and subsequent advances (not initial at-bat)
+				const fontWeightClass = movement.isInitialAtBat ? 'font-bold' : 'font-normal';
 
 				return (
 					<div
 						key={`movement-${index}`}
-						className={`absolute font-mono font-bold text-2xs text-primary-900 dark:text-primary-100 ${positionInfo.alignment} ${positionInfo.className}`}>
+						className={`absolute font-mono ${fontWeightClass} ${textColorClass} ${positionInfo.alignment} ${positionInfo.className}`}
+						style={{ fontSize: '7px', lineHeight: '7px' }}>
 						{shorthand}
 					</div>
 				);
@@ -425,28 +531,36 @@ const renderStandardLabels = (cornerLabels: { first: string; second: string; thi
 		<>
 			{/* Top Right = First Base Label */}
 			{cornerLabels.first && (
-				<div className="absolute -top-2 -right-2 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
+				<div
+					className="absolute -bottom-0.5 -right-0.5 font-mono font-bold text-primary-900 dark:text-primary-100 text-center -rotate-45"
+					style={{ fontSize: '7px', lineHeight: '7px' }}>
 					{cornerLabels.first}
 				</div>
 			)}
 
 			{/* Top Left = Second Base Label */}
 			{cornerLabels.second && (
-				<div className="absolute -top-2 -left-2 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
+				<div
+					className="absolute -top-0.5 -right-0.5 font-mono font-bold text-primary-900 dark:text-primary-100 text-center rotate-45"
+					style={{ fontSize: '7px', lineHeight: '7px' }}>
 					{cornerLabels.second}
 				</div>
 			)}
 
 			{/* Bottom Left = Third Base Label */}
 			{cornerLabels.third && (
-				<div className="absolute -bottom-2 -left-2 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
+				<div
+					className="absolute -top-0.5 -left-0.5 font-mono font-bold text-primary-900 dark:text-primary-100 text-center -rotate-45"
+					style={{ fontSize: '7px', lineHeight: '7px' }}>
 					{cornerLabels.third}
 				</div>
 			)}
 
 			{/* Bottom Right = Home Plate Label */}
 			{cornerLabels.home && (
-				<div className="absolute -right-2 -bottom-2 font-mono font-bold text-2xs text-primary-900 dark:text-primary-100">
+				<div
+					className="absolute -bottom-0.5 -left-0.5 font-mono font-bold text-primary-900 dark:text-primary-100 text-center rotate-45"
+					style={{ fontSize: '7px', lineHeight: '7px' }}>
 					{cornerLabels.home}
 				</div>
 			)}
@@ -640,9 +754,12 @@ const AtBatTooltip = ({
 								const nextMovement = baseRunningTrip.basePath[j];
 
 								// If it's the same at-bat and same player, consolidate
+								// BUT don't consolidate stolen bases - they should be treated as separate plays
 								if (
 									nextMovement.atBatIndex === currentMovement.atBatIndex &&
-									nextMovement.playerId === currentMovement.playerId
+									nextMovement.playerId === currentMovement.playerId &&
+									!currentMovement.event.toLowerCase().includes('stolen') &&
+									!nextMovement.event.toLowerCase().includes('stolen')
 								) {
 									finalMovement = nextMovement;
 									j++;
@@ -1244,7 +1361,15 @@ const trackSubsequentMovements = (
 	startingAtBatIndex: number
 ): void => {
 	// Get all plays AFTER the starting at-bat (not including it)
-	const subsequentPlays = allPlays.filter((play) => play.about.atBatIndex > startingAtBatIndex);
+	// Also include plays with the same atBatIndex that occur after the initial at-bat (like stolen bases)
+	const startingPlay = allPlays.find((play) => play.about.atBatIndex === startingAtBatIndex);
+	const startingTimestamp = startingPlay ? startingPlay.about.startTime : '';
+
+	const subsequentPlays = allPlays.filter(
+		(play) =>
+			play.about.atBatIndex > startingAtBatIndex ||
+			(play.about.atBatIndex === startingAtBatIndex && play.about.startTime > startingTimestamp)
+	);
 
 	let currentBase = trip.basePath[trip.basePath.length - 1].to;
 	let stillOnBase = true;
@@ -1289,13 +1414,21 @@ const trackSubsequentMovements = (
 
 					const movement = playerRunner.movement;
 
+					// Check if this is a stolen base movement
+					const isStolenBase =
+						playerRunner.details.event.toLowerCase().includes('stolen') ||
+						playerRunner.details.event.toLowerCase().includes('steals');
+
 					// Track the movement - store both original event and shorthand
-					const atBatResultShorthand = getMovementShorthand(play.result.event, false, play.result.description);
+					// For stolen bases, use the runner event, otherwise use the play result event
+					const eventToUse = isStolenBase ? playerRunner.details.event : play.result.event;
+					const atBatResultShorthand = getMovementShorthand(eventToUse, false, play.result.description);
+
 					trip.basePath.push({
 						from: movement.start,
 						to: movement.end,
 						atBatIndex: play.about.atBatIndex,
-						event: play.result.event, // Keep original event for tooltips
+						event: eventToUse, // Use runner event for stolen bases, play event for others
 						description: play.result.description,
 						isOut: movement.isOut,
 						outBase: movement.outBase,
@@ -1566,6 +1699,16 @@ const formatMovementDisplay = (
 			Home: 'home',
 		};
 		const baseName = baseMap[outBase] || outBase;
+
+		// Handle double play situations with "after" phrasing
+		if (event.toLowerCase().includes('double play') || event.toLowerCase().includes('grounded into dp')) {
+			const batterText = batterName
+				? ` after ${batterName} grounds into a double play`
+				: ` after grounds into a double play`;
+			return `Out at ${baseName}${batterText}`;
+		}
+
+		// Standard out phrasing
 		const batterText = batterName ? ` on ${batterName}'s ${event.toLowerCase()}` : ` on ${event.toLowerCase()}`;
 		return `Out at ${baseName}${batterText}`;
 	}
@@ -1580,6 +1723,15 @@ const formatMovementDisplay = (
 		};
 		const targetBase = baseMap[to] || to;
 		return `Steals ${targetBase} base`;
+	}
+
+	// Handle double play situations - use "after" phrasing
+	if (event.toLowerCase().includes('double play') || event.toLowerCase().includes('grounded into dp')) {
+		const baseName = formatBaseName(to, false);
+		const batterText = batterName
+			? ` after ${batterName} grounds into a double play`
+			: ` after grounds into a double play`;
+		return `Advances to ${baseName}${batterText}`;
 	}
 
 	// For all other movements, add "Advances to" with batter name
@@ -2911,6 +3063,57 @@ const extractPlayerNameFromDescription = (description: string): string => {
 	// "George Springer homers (30) on a fly ball to left center field."
 	// "Maikel Garcia walks."
 
+	// Handle challenged play descriptions first
+	if (description.includes('challenged') && description.includes('overturned:')) {
+		// Extract player name after "overturned:"
+		const afterOverturned = description.split('overturned:')[1];
+		if (afterOverturned) {
+			// Simple approach: extract everything before the first action verb
+			const actionVerbs = [
+				'grounds',
+				'flies',
+				'lines',
+				'pops',
+				'homers',
+				'singles',
+				'doubles',
+				'triples',
+				'walks',
+				'strikes',
+				'hits',
+				'reaches',
+				'advances',
+				'steals',
+				'caught',
+				'thrown',
+				'out',
+				'safe',
+				'scores',
+				'drives',
+				'swings',
+				'called',
+				'bunts',
+				'sacrifices',
+				'pinch',
+				'replaces',
+				'substitution',
+			];
+
+			let extractedName = afterOverturned.trim();
+			for (const verb of actionVerbs) {
+				const verbIndex = extractedName.toLowerCase().indexOf(' ' + verb);
+				if (verbIndex !== -1) {
+					extractedName = extractedName.substring(0, verbIndex);
+					break;
+				}
+			}
+
+			if (extractedName) {
+				return extractedName.trim();
+			}
+		}
+	}
+
 	// Extract the first part before the first period, comma, or action verb
 	const match = description.match(
 		/^([^.,]+?)(?:\s+(?:grounds|flies|lines|pops|homers|singles|doubles|triples|walks|strikes|hits|reaches|advances|steals|caught|thrown|out|safe|scores|drives|swings|called|bunts|sacrifices|pinch|replaces|substitution))/i
@@ -3326,9 +3529,10 @@ const renderDiamondGrid = (atBatResult?: string, description?: string, baseRunni
 	// Top Left = Second Base, Top Right = First Base, Bottom Left = Third Base, Bottom Right = Home Plate
 	return (
 		<div className="flex absolute inset-0 justify-center items-center">
-			<div className="relative w-6 h-6">
+			{/* COME BACK HERE */}
+			<div className="relative w-6 h-6 rotate-45">
 				{/* Enhanced Diamond grid with base path visualization */}
-				<div className="grid grid-cols-2 gap-px w-6 h-6 rotate-45">
+				<div className="grid grid-cols-2 gap-px w-6 h-6">
 					{/* Top Left = Second Base (2B) */}
 					<div
 						className={`w-2.5 h-2.5 ${
@@ -3742,13 +3946,18 @@ const BatterRow = ({
 											// Extract the actual player name from the description
 											const actualPlayerName = extractPlayerNameFromDescription(atBatResult.description) || batter.name;
 
+											// Normalize names for comparison (remove periods, extra spaces)
+											const normalizedActualName = actualPlayerName.replace(/[.\s]+/g, ' ').trim();
+
 											// Find all plays for this player in this inning
-											const playerPlays = allPlays.filter(
-												(play: any) =>
+											const playerPlays = allPlays.filter((play: any) => {
+												const normalizedPlayName = play.matchup.batter.fullName.replace(/[.\s]+/g, ' ').trim();
+												return (
 													play.result.type === 'atBat' &&
-													play.matchup.batter.fullName === actualPlayerName &&
+													normalizedPlayName === normalizedActualName &&
 													play.about.inning === inningNumber
-											);
+												);
+											});
 
 											// Sort plays by atBatIndex to ensure correct order
 											playerPlays.sort((a: any, b: any) => a.about.atBatIndex - b.about.atBatIndex);
@@ -3803,9 +4012,9 @@ const BatterRow = ({
 										</span>
 										{/* RBI indicators */}
 										{atBatResult.rbis > 0 && (
-											<div className="flex absolute bottom-0 left-0">
+											<div className="flex absolute bottom-1 left-1">
 												{Array.from({ length: atBatResult.rbis }, (_, i) => (
-													<div key={i} className="w-1 h-1 bg-black rounded-full mr-0.5" />
+													<div key={i} className="w-1 h-1 bg-primary-900 dark:bg-primary-100 rounded-full mr-0.5" />
 												))}
 											</div>
 										)}
@@ -4523,7 +4732,41 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 
 							{/* IP Total */}
 							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
-								{displayPitchers.reduce((sum, pitcher) => sum + (pitcher.innings_pitched || 0), 0).toFixed(1)}
+								{(() => {
+									// Convert baseball decimal format to actual fractions for accurate summing
+									let totalThirds = 0;
+
+									displayPitchers.forEach((pitcher) => {
+										const innings = pitcher.innings_pitched || 0;
+										const wholeInnings = Math.floor(innings);
+										const decimalPart = innings - wholeInnings;
+
+										// Convert to thirds of an inning
+										totalThirds += wholeInnings * 3; // Convert whole innings to thirds
+
+										if (Math.abs(decimalPart - 0.1) < 0.001) {
+											totalThirds += 1; // .1 = 1/3 = 1 third
+										} else if (Math.abs(decimalPart - 0.2) < 0.001) {
+											totalThirds += 2; // .2 = 2/3 = 2 thirds
+										} else if (decimalPart > 0) {
+											// Handle any other decimal values by converting to thirds
+											totalThirds += Math.round(decimalPart * 3);
+										}
+									});
+
+									// Convert back to baseball decimal format
+									const wholeInnings = Math.floor(totalThirds / 3);
+									const remainingThirds = totalThirds % 3;
+
+									let baseballDecimal = 0;
+									if (remainingThirds === 1) {
+										baseballDecimal = 0.1; // 1 third = .1
+									} else if (remainingThirds === 2) {
+										baseballDecimal = 0.2; // 2 thirds = .2
+									}
+
+									return (wholeInnings + baseballDecimal).toFixed(1);
+								})()}
 							</div>
 
 							{/* P(S) Total */}

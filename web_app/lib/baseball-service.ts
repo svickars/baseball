@@ -185,8 +185,6 @@ function extractBatterStats(
 	players: any,
 	substitutionData?: Map<string, { type: string; inning: number; halfInning: string }>
 ): any[] {
-	console.log(`Extracting batters with ${batterIds.length} batter IDs:`, batterIds);
-
 	// Convert batter IDs to full player objects with stats
 	const batterObjects = batterIds
 		.map((batterId: any) => {
@@ -195,19 +193,9 @@ function extractBatterStats(
 			const playerIdWithPrefix = `ID${idStr}`;
 			// Look up from the players collection which has stats, not the basic players collection
 			const player = players[playerIdWithPrefix];
-			console.log(`Looking up batter ID ${batterId} as ${playerIdWithPrefix}:`, player ? 'Found' : 'Not found');
 			return player;
 		})
 		.filter(Boolean); // Remove any undefined players
-
-	console.log(
-		'Batters found:',
-		batterObjects.map((p: any) => ({
-			name: p.person?.fullName,
-			hasStats: !!p.stats,
-			battingStats: p.stats?.batting,
-		}))
-	);
 
 	const result = batterObjects
 		.filter((batter: any) => {
@@ -341,33 +329,6 @@ function processPlayByPlayData(allPlays: any[], players: any): any {
 		const batterId = play.matchup?.batter?.id;
 		const pitcherId = play.matchup?.pitcher?.id;
 
-		// Debug logging for first few plays to check error detection
-		if (index < 10) {
-			console.log(`DEBUG: Play ${index}:`, {
-				inning,
-				halfInning,
-				eventType: play.result?.eventType,
-				description: play.result?.description,
-				hasErrorText: (play.result?.description || '').toLowerCase().includes('error'),
-				hasPickoffError: (play.result?.description || '').toLowerCase().includes('pickoff'),
-				fullPlay: play,
-			});
-		}
-
-		// Debug logging for third inning plays to find the pickoff error
-		if (inning === 3 && halfInning === 'top') {
-			console.log(`DEBUG: Third inning top play ${index}:`, {
-				inning,
-				halfInning,
-				eventType: play.result?.eventType,
-				description: play.result?.description,
-				hasErrorText: (play.result?.description || '').toLowerCase().includes('error'),
-				hasPickoffError: (play.result?.description || '').toLowerCase().includes('pickoff'),
-				hasAdvance: (play.result?.description || '').toLowerCase().includes('advance'),
-				fullPlay: play,
-			});
-		}
-
 		// Track errors based on MLB API event types
 		const eventType = play.result?.eventType;
 		const isError =
@@ -394,15 +355,6 @@ function processPlayByPlayData(allPlays: any[], players: any): any {
 			description.toLowerCase().includes('pickoff error');
 
 		if (isError || hasErrorText) {
-			console.log(`DEBUG: ERROR DETECTED in play ${index}:`, {
-				inning,
-				halfInning,
-				eventType,
-				description,
-				isError,
-				hasErrorText,
-			});
-
 			const errorKey = `${inning}-${halfInning}`;
 			if (!playByPlayData.errors.has(errorKey)) {
 				playByPlayData.errors.set(errorKey, []);
@@ -414,37 +366,6 @@ function processPlayByPlayData(allPlays: any[], players: any): any {
 				eventType: eventType,
 				description: description,
 				team: halfInning === 'top' ? 'home' : 'away', // Error committed by the team in the field
-			});
-		}
-
-		// Debug logging for plays that mention "advance" or "pickoff" to find the pickoff error
-		if (description.toLowerCase().includes('advance') || description.toLowerCase().includes('pickoff')) {
-			console.log(`DEBUG: POTENTIAL ERROR PLAY with advance/pickoff in play ${index}:`, {
-				inning,
-				halfInning,
-				eventType,
-				description,
-				hasErrorText,
-				isError,
-			});
-		}
-
-		// Debug logging for all plays to find any mention of errors or advances
-		if (
-			description.toLowerCase().includes('error') ||
-			description.toLowerCase().includes('throwing') ||
-			description.toLowerCase().includes('fielding') ||
-			description.toLowerCase().includes('catching') ||
-			description.toLowerCase().includes('miscue') ||
-			description.toLowerCase().includes('misplay')
-		) {
-			console.log(`DEBUG: POTENTIAL ERROR PLAY found in play ${index}:`, {
-				inning,
-				halfInning,
-				eventType,
-				description,
-				hasErrorText,
-				isError,
 			});
 		}
 
@@ -492,14 +413,6 @@ function processPlayByPlayData(allPlays: any[], players: any): any {
 		inningResults: Object.fromEntries(playByPlayData.inningResults),
 		errors: Object.fromEntries(playByPlayData.errors),
 	};
-
-	console.log('DEBUG: processPlayByPlayData final result:', {
-		atBatsCount: playByPlayData.atBats.size,
-		substitutionsCount: playByPlayData.substitutions.size,
-		errorsCount: playByPlayData.errors.size,
-		errorsKeys: Array.from(playByPlayData.errors.keys()),
-		allPlaysProcessed: allPlays.length,
-	});
 
 	return result;
 }
@@ -849,14 +762,7 @@ async function extractManagers(
 				managers.home = homeManager.person.fullName;
 			}
 		}
-
-		console.log('Extracted managers from coaches endpoint:', {
-			awayManager: managers.away,
-			homeManager: managers.home,
-		});
-	} catch (error) {
-		console.log('Error fetching coaches:', error);
-	}
+	} catch (error) {}
 
 	return managers.away || managers.home ? managers : generateFallbackManagers();
 }
@@ -986,14 +892,7 @@ async function extractUniforms(
 				}
 			});
 		}
-
-		console.log('Extracted uniforms from API:', {
-			awayTeamId,
-			homeTeamId,
-			uniforms: uniforms,
-		});
 	} catch (error) {
-		console.log(`Error fetching uniforms for teams ${awayTeamId}, ${homeTeamId}:`, error);
 		// Return null values if uniforms can't be fetched
 	}
 
@@ -1032,7 +931,6 @@ function extractStartTimeFromSchedule(gameData: any): string | null {
 			// No timeZone specified - uses user's local timezone
 		});
 	} catch (error) {
-		console.log('Error formatting start time:', error);
 		return null;
 	}
 }
@@ -1073,7 +971,6 @@ function extractEndTime(gameData: any): string | null {
 
 		return `${endTimeFormatted} (${durationFormatted})`;
 	} catch (error) {
-		console.log('Error calculating end time:', error);
 		return null;
 	}
 }
@@ -1089,7 +986,6 @@ function extractWeatherFromSchedule(gameData: any): string | null {
 
 		return `${condition}, ${tempF}°F (${tempC}°C)`;
 	} catch (error) {
-		console.log('Error formatting weather:', error);
 		return null;
 	}
 }
@@ -1101,7 +997,6 @@ function extractWindFromSchedule(gameData: any): string | null {
 	try {
 		return gameData.weather.wind;
 	} catch (error) {
-		console.log('Error formatting wind:', error);
 		return null;
 	}
 }
@@ -1119,7 +1014,6 @@ function deriveSubstitutionTimingFromBoxscore(
 	boxscore: any,
 	allPlays: any[]
 ): Map<string, { type: string; inning: number; halfInning: string }> {
-	console.log('DEBUG: deriveSubstitutionTimingFromBoxscore called');
 	const substitutionData = new Map<string, { type: string; inning: number; halfInning: string }>();
 
 	// Process both teams
@@ -1127,63 +1021,21 @@ function deriveSubstitutionTimingFromBoxscore(
 
 	teams.forEach((team: any, teamIndex: number) => {
 		const teamName = teamIndex === 0 ? 'away' : 'home';
-		console.log(`DEBUG: Processing ${teamName} team for substitutions`);
-
-		// Check all batters for substitution indicators
-		console.log(`DEBUG: Processing ${team.batters.length} batters for ${teamName} team:`, team.batters);
-
-		// Look for specific players we're trying to debug
-		const targetPlayers = ['Ty France', 'Isiah Kiner-Falefa', 'Nick Fortes'];
-		console.log(`DEBUG: Looking for target players in ${teamName} team:`, targetPlayers);
 
 		team.batters.forEach((batterId: any) => {
 			const player = team.players[`ID${batterId}`];
 			if (!player) {
-				console.log(`DEBUG: No player found for batter ID ${batterId}`);
 				return;
 			}
 
 			const playerName = player.person?.fullName;
 			const playerId = player.person?.id;
 			if (!playerName || !playerId) {
-				console.log(`DEBUG: Missing name or ID for player ${batterId}: name=${playerName}, id=${playerId}`);
 				return;
-			}
-
-			// Check if this is one of our target players
-			if (targetPlayers.includes(playerName)) {
-				console.log(`DEBUG: FOUND TARGET PLAYER ${playerName} in ${teamName} team!`);
 			}
 
 			// Check if player has multiple positions (indicates substitution)
 			const allPositions = player.allPositions || [];
-
-			// Debug: Log all players to see their positions and starter status
-			console.log(`DEBUG: Player ${playerName}:`, {
-				allPositions: allPositions.length,
-				positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
-				isStarter: player.gameStatus?.isStarter,
-				gameStatus: player.gameStatus,
-				hasStats: !!player.stats,
-				battingStats: player.stats?.batting,
-			});
-
-			// Special debug for the players we're looking for
-			if (
-				playerName.includes('Ty France') ||
-				playerName.includes('Isiah Kiner-Falefa') ||
-				playerName.includes('Nick Fortes')
-			) {
-				console.log(`DEBUG: FOUND TARGET PLAYER ${playerName}:`, {
-					batterId,
-					allPositions: allPositions.length,
-					positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
-					isStarter: player.gameStatus?.isStarter,
-					gameStatus: player.gameStatus,
-					hasStats: !!player.stats,
-					battingStats: player.stats?.batting,
-				});
-			}
 
 			// Check if player is a substitution using multiple criteria:
 			// 1. Multiple positions (position change)
@@ -1206,34 +1058,16 @@ function deriveSubstitutionTimingFromBoxscore(
 				(hasMultiplePositions && !isStarter) || (hasBattingStats && !isStarter) || (player.stats && !isStarter);
 
 			if (!isSubstitution) {
-				console.log(`DEBUG: Skipping ${playerName} - not detected as substitution:`, {
-					hasMultiplePositions,
-					isStarter,
-					hasBattingStats,
-					hasStats: !!player.stats,
-				});
 				return;
 			}
 
 			if (hasMultiplePositions) {
 				// Check if this is a starter who changed positions during the game
 				if (isStarter) {
-					console.log(`DEBUG: Found starter with position change: ${playerName} (ID: ${playerId})`, {
-						positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
-						gameStatus: player.gameStatus,
-						stats: player.stats,
-					});
-
 					// This is a starter who changed positions - we'll handle this in the batter processing
 					// by tracking their initial and final positions
 					return;
 				}
-
-				console.log(`DEBUG: Found player with multiple positions: ${playerName} (ID: ${playerId})`, {
-					positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
-					gameStatus: player.gameStatus,
-					stats: player.stats,
-				});
 
 				// Determine substitution type based on positions and stats
 				let substitutionType = 'DEF'; // Default to defensive substitution
@@ -1284,9 +1118,6 @@ function deriveSubstitutionTimingFromBoxscore(
 						if (about && about.inning) {
 							estimatedInning = about.inning;
 							estimatedHalfInning = about.halfInning || 'top';
-							console.log(
-								`DEBUG: Found ${playerName} (ID: ${playerId}) first appearance in inning ${estimatedInning} ${estimatedHalfInning}`
-							);
 							break;
 						}
 					}
@@ -1294,7 +1125,6 @@ function deriveSubstitutionTimingFromBoxscore(
 
 				// If still not found by ID, try name matching as fallback
 				if (estimatedInning === 9) {
-					console.log(`DEBUG: Player ${playerName} (ID: ${playerId}) not found by ID, trying name matching...`);
 					for (let i = 0; i < allPlays.length; i++) {
 						const play = allPlays[i];
 						const players = play.players || [];
@@ -1314,7 +1144,6 @@ function deriveSubstitutionTimingFromBoxscore(
 							if (about && about.inning) {
 								estimatedInning = about.inning;
 								estimatedHalfInning = about.halfInning || 'top';
-								console.log(`DEBUG: Found ${playerName} by name in inning ${estimatedInning} ${estimatedHalfInning}`);
 								break;
 							}
 						}
@@ -1323,7 +1152,6 @@ function deriveSubstitutionTimingFromBoxscore(
 
 				// If still not found, try a different approach - look for the player in the play description
 				if (estimatedInning === 9) {
-					console.log(`DEBUG: Player ${playerName} not found in play players, checking descriptions...`);
 					for (let i = 0; i < allPlays.length; i++) {
 						const play = allPlays[i];
 						const description = play.result?.description || '';
@@ -1334,9 +1162,6 @@ function deriveSubstitutionTimingFromBoxscore(
 							if (about && about.inning) {
 								estimatedInning = about.inning;
 								estimatedHalfInning = about.halfInning || 'top';
-								console.log(
-									`DEBUG: Found ${playerName} in description of inning ${estimatedInning} ${estimatedHalfInning}: "${description}"`
-								);
 								break;
 							}
 						}
@@ -1349,21 +1174,8 @@ function deriveSubstitutionTimingFromBoxscore(
 					inning: estimatedInning,
 					halfInning: estimatedHalfInning,
 				});
-
-				console.log(`DEBUG: Derived substitution for ${playerName}:`, {
-					type: substitutionType,
-					inning: estimatedInning,
-					halfInning: estimatedHalfInning,
-				});
 			} else {
 				// Player has single position but is still a substitution (detected by batting stats or other criteria)
-				console.log(`DEBUG: Found single-position substitution: ${playerName} (ID: ${playerId})`, {
-					positions: allPositions.map((pos: any) => ({ code: pos.code, name: pos.name })),
-					gameStatus: player.gameStatus,
-					stats: player.stats,
-					isStarter,
-					hasBattingStats,
-				});
 
 				// Determine substitution type based on stats and positions
 				let substitutionType = 'DEF'; // Default to defensive substitution
@@ -1413,9 +1225,6 @@ function deriveSubstitutionTimingFromBoxscore(
 						if (about && about.inning) {
 							estimatedInning = about.inning;
 							estimatedHalfInning = about.halfInning || 'top';
-							console.log(
-								`DEBUG: Found ${playerName} (ID: ${playerId}) first appearance in inning ${estimatedInning} ${estimatedHalfInning}`
-							);
 							break;
 						}
 					}
@@ -1423,7 +1232,6 @@ function deriveSubstitutionTimingFromBoxscore(
 
 				// If still not found by ID, try name matching as fallback
 				if (estimatedInning === 9) {
-					console.log(`DEBUG: Player ${playerName} (ID: ${playerId}) not found by ID, trying name matching...`);
 					for (let i = 0; i < allPlays.length; i++) {
 						const play = allPlays[i];
 						const players = play.players || [];
@@ -1443,7 +1251,6 @@ function deriveSubstitutionTimingFromBoxscore(
 							if (about && about.inning) {
 								estimatedInning = about.inning;
 								estimatedHalfInning = about.halfInning || 'top';
-								console.log(`DEBUG: Found ${playerName} by name in inning ${estimatedInning} ${estimatedHalfInning}`);
 								break;
 							}
 						}
@@ -1452,7 +1259,6 @@ function deriveSubstitutionTimingFromBoxscore(
 
 				// If still not found, try a different approach - look for the player in the play description
 				if (estimatedInning === 9) {
-					console.log(`DEBUG: Player ${playerName} not found in play players, checking descriptions...`);
 					for (let i = 0; i < allPlays.length; i++) {
 						const play = allPlays[i];
 						const description = play.result?.description || '';
@@ -1463,9 +1269,7 @@ function deriveSubstitutionTimingFromBoxscore(
 							if (about && about.inning) {
 								estimatedInning = about.inning;
 								estimatedHalfInning = about.halfInning || 'top';
-								console.log(
-									`DEBUG: Found ${playerName} in description of inning ${estimatedInning} ${estimatedHalfInning}: "${description}"`
-								);
+
 								break;
 							}
 						}
@@ -1474,12 +1278,6 @@ function deriveSubstitutionTimingFromBoxscore(
 
 				// Store the substitution data
 				substitutionData.set(playerName, {
-					type: substitutionType,
-					inning: estimatedInning,
-					halfInning: estimatedHalfInning,
-				});
-
-				console.log(`DEBUG: Derived substitution for ${playerName}:`, {
 					type: substitutionType,
 					inning: estimatedInning,
 					halfInning: estimatedHalfInning,
@@ -1497,22 +1295,7 @@ function processSubstitutionEvents(
 ): Map<string, { type: string; inning: number; halfInning: string }> {
 	const substitutionData = new Map<string, { type: string; inning: number; halfInning: string }>();
 
-	console.log('DEBUG: processSubstitutionEvents called with', substitutionEvents.length, 'events');
 	substitutionEvents.forEach((event: any, index: number) => {
-		if (index < 3) {
-			// Only log first 3 for debugging
-			console.log('DEBUG: Processing substitution event', index, ':', {
-				eventType: event.result?.eventType,
-				description: event.result?.description,
-				hasPlayers: !!event.players,
-				playersCount: event.players?.length || 0,
-				// Check MLB API spec properties
-				isSubstitution: event.isSubstitution,
-				hasSubstitution: !!event.substitution,
-				substitution: event.substitution,
-				about: event.about,
-			});
-		}
 		const description = event.result?.description || '';
 		const players = event.players || [];
 		const about = event.about || {};
@@ -1561,12 +1344,6 @@ function processSubstitutionEvents(
 
 		// Extract inning information from the about field
 		// Debug: Log the about field structure to understand the data format
-		if (substitutionEvents.length <= 3) {
-			// Only log first few for debugging
-			console.log('DEBUG: Event about field:', JSON.stringify(about, null, 2));
-			console.log('DEBUG: Event description:', description);
-			console.log('DEBUG: Player name:', playerName);
-		}
 
 		// Try multiple possible field names for inning data
 		let inning = 9; // Default
@@ -1600,22 +1377,8 @@ function processSubstitutionEvents(
 
 // Helper function to extract pitcher statistics from MLB API data
 function extractPitcherStats(pitchers: any[]): any[] {
-	console.log('extractPitcherStats called with:', pitchers.length, 'pitchers');
-
 	const result = pitchers.map((pitcher: any, index: number) => {
-		console.log(`Pitcher ${index} object:`, pitcher);
-		console.log(`Pitcher ${index} keys:`, Object.keys(pitcher));
-
 		const stats = pitcher.stats?.pitching || pitcher.stats || {};
-
-		console.log(`Pitcher ${index} stats debug:`, {
-			hasStats: !!pitcher.stats,
-			hasPitchingStats: !!pitcher.stats?.pitching,
-			statsKeys: pitcher.stats ? Object.keys(pitcher.stats) : [],
-			inningsPitched: stats.inningsPitched,
-			hits: stats.hits,
-			earnedRuns: stats.earnedRuns,
-		});
 
 		// Calculate innings pitched
 		const inningsPitched = stats.inningsPitched ? parseFloat(stats.inningsPitched) : 0.0;
@@ -1676,17 +1439,8 @@ function extractPitcherStats(pitchers: any[]): any[] {
 function extractAllPitchersFromGame(teamData: any, players: any, isAway: boolean): any[] {
 	const allPitchers: any[] = [];
 
-	console.log(`Extracting pitchers for ${isAway ? 'away' : 'home'} team:`, {
-		teamDataKeys: Object.keys(teamData),
-		hasPitchers: !!teamData.pitchers,
-		pitchersCount: teamData.pitchers?.length || 0,
-		playersCount: Object.keys(players).length,
-	});
-
 	// First, get the official pitchers from the team data
 	if (teamData.pitchers && teamData.pitchers.length > 0) {
-		console.log('Official pitcher IDs found:', teamData.pitchers);
-
 		// Convert pitcher IDs to full player objects with stats
 		const pitcherObjects = teamData.pitchers
 			.map((pitcherId: any) => {
@@ -1695,29 +1449,16 @@ function extractAllPitchersFromGame(teamData: any, players: any, isAway: boolean
 				const playerIdWithPrefix = `ID${idStr}`;
 				// Look up from the teamData.players collection which has stats, not the basic players collection
 				const player = teamData.players[playerIdWithPrefix];
-				console.log(`Looking up pitcher ID ${pitcherId} as ${playerIdWithPrefix}:`, player ? 'Found' : 'Not found');
 				return player;
 			})
 			.filter(Boolean); // Remove any undefined players
 
-		console.log(
-			'Official pitchers found:',
-			pitcherObjects.map((p: any) => ({
-				name: p.person?.fullName,
-				hasStats: !!p.stats,
-				pitchingStats: p.stats?.pitching,
-			}))
-		);
 		const officialPitchers = extractPitcherStats(pitcherObjects);
-		console.log(
-			'Official pitchers:',
-			officialPitchers.map((p) => p.name)
-		);
+
 		allPitchers.push(...officialPitchers);
 	}
 
 	// Debug: Look at all players to see who has pitching stats
-	console.log('Checking all players for pitching stats...');
 	let playersWithPitchingStats = 0;
 	let playersWithAnyStats = 0;
 
@@ -1726,18 +1467,9 @@ function extractAllPitchersFromGame(teamData: any, players: any, isAway: boolean
 			playersWithAnyStats++;
 			if (player.stats.pitching) {
 				playersWithPitchingStats++;
-				console.log(`Player with pitching stats: ${player.person?.fullName}`, {
-					inningsPitched: player.stats.pitching.inningsPitched,
-					pitchesThrown: player.stats.pitching.pitchesThrown,
-					statsKeys: Object.keys(player.stats),
-				});
 			}
 		}
 	});
-
-	console.log(
-		`Found ${playersWithPitchingStats} players with pitching stats out of ${playersWithAnyStats} players with any stats`
-	);
 
 	// Then, look through all players to find any who have pitching stats
 	// This includes position players who may have pitched
@@ -1768,16 +1500,6 @@ function extractAllPitchersFromGame(teamData: any, players: any, isAway: boolean
 
 	// Don't sort pitchers here - let the UI component handle chronological ordering
 	const sortedPitchers = allPitchers;
-
-	console.log(
-		`Final pitchers for ${isAway ? 'away' : 'home'} team:`,
-		sortedPitchers.map((p) => ({
-			name: p.name,
-			innings: p.innings_pitched,
-			era: p.era,
-			number: p.number,
-		}))
-	);
 
 	return sortedPitchers;
 }
@@ -2008,8 +1730,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 
 				// First try to get inning data from the schedule API (which now includes linescore)
 				if (gameData.linescore && gameData.linescore.innings && gameData.linescore.innings.length > 0) {
-					console.log(`Game ${gamePk} - Using linescore data from schedule API:`, gameData.linescore.innings);
-
 					innings = gameData.linescore.innings.map((inning: any) => ({
 						inning: inning.num,
 						away_runs: inning.away?.runs || 0,
@@ -2023,52 +1743,28 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 						awayErrors = gameData.linescore.teams.away?.errors || 0;
 						homeErrors = gameData.linescore.teams.home?.errors || 0;
 					}
-
-					console.log(`Game ${gamePk} - Processed innings from schedule API:`, innings);
 				}
 				// Fallback to game feed API if schedule API doesn't have complete data
 				else {
 					try {
 						const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
 
-						console.log(`Fetching game feed for ${gamePk} (date: ${date}, status: ${status.detailedState})`);
-
 						const gameFeedData = await makeCachedRequest(
 							gameFeedCache,
 							gameFeedCacheKey,
 							async () => {
 								const gameFeedUrl = `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`;
-								console.log(`Making API call to: ${gameFeedUrl}`);
-
 								const gameFeedResponse = await fetch(gameFeedUrl, {
 									headers: {
 										'User-Agent': 'Mozilla/5.0 (compatible; BaseballApp/1.0)',
 									},
 								});
 
-								console.log(
-									`API response status for ${gamePk}: ${gameFeedResponse.status} ${gameFeedResponse.statusText}`
-								);
-
 								if (!gameFeedResponse.ok) {
 									throw new Error(`Game feed not available for game ${gamePk}: ${gameFeedResponse.status}`);
 								}
 
 								const responseData = await gameFeedResponse.json();
-								console.log(`API response data structure for ${gamePk}:`, {
-									hasGameData: !!responseData.gameData,
-									hasLiveData: !!responseData.liveData,
-									hasBoxscore: !!responseData.liveData?.boxscore,
-									hasLinescore: !!responseData.liveData?.linescore,
-									hasAllPlays: !!responseData.liveData?.plays?.allPlays,
-									boxscoreInningsCount: responseData.liveData?.boxscore?.innings?.length || 0,
-									linescoreInningsCount: responseData.liveData?.linescore?.innings?.length || 0,
-									allPlaysCount: responseData.liveData?.plays?.allPlays?.length || 0,
-									gameStatus: responseData.gameData?.status?.detailedState,
-									gameType: responseData.gameData?.game?.type,
-									reason: responseData.gameData?.status?.reason,
-									abstractGameState: responseData.gameData?.status?.abstractGameState,
-								});
 
 								return responseData;
 							},
@@ -2086,19 +1782,13 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 						const scheduleStatus = status.detailedState;
 						const liveFeedStatus = gameFeedData.gameData?.status?.detailedState;
 
-						console.log(`Game ${gamePk} - Status comparison: Schedule=${scheduleStatus}, LiveFeed=${liveFeedStatus}`);
-
 						// Primary method: Use boxscore innings data (most complete)
 						if (boxscore && boxscore.innings && boxscore.innings.length > 0) {
-							console.log(`Game ${gamePk} - Using boxscore innings data:`, boxscore.innings);
-
 							innings = boxscore.innings.map((inning: any) => ({
 								inning: inning.num,
 								away_runs: inning.away?.runs || 0,
 								home_runs: inning.home?.runs || 0,
 							}));
-
-							console.log(`Game ${gamePk} - Processed innings from boxscore:`, innings);
 
 							// Get hits and errors from boxscore teams
 							if (boxscore.teams) {
@@ -2110,8 +1800,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 						}
 						// Fallback method: Use linescore innings data
 						else if (linescore && linescore.innings && linescore.innings.length > 0) {
-							console.log(`Game ${gamePk} - Using linescore innings data:`, linescore.innings);
-
 							// Always process the data if it exists, regardless of status
 							// The MLB API provides complete data for all games
 							innings = linescore.innings.map((inning: any) => ({
@@ -2119,7 +1807,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 								away_runs: inning.away?.runs || 0,
 								home_runs: inning.home?.runs || 0,
 							}));
-							console.log(`Game ${gamePk} - Processed innings from linescore:`, innings);
 
 							// Get hits and errors from linescore
 							if (linescore.teams) {
@@ -2131,8 +1818,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 						}
 						// Final fallback: Reconstruct from allPlays data
 						else if (allPlays && allPlays.length > 0) {
-							console.log(`Game ${gamePk} - Using allPlays reconstruction (${allPlays.length} plays)`);
-
 							// Reconstruct innings from allPlays data (same approach as working baseball library)
 							const inningsMap = new Map<
 								number,
@@ -2176,8 +1861,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 								home_runs: data.home_runs,
 							}));
 
-							console.log(`Game ${gamePk} - Reconstructed innings from plays:`, innings);
-
 							// Get hits and errors from linescore if available
 							if (linescore && linescore.teams) {
 								awayHits = linescore.teams.away?.hits || 0;
@@ -2186,16 +1869,11 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 								homeErrors = linescore.teams.home?.errors || 0;
 							}
 						} else {
-							console.log(`Game ${gamePk} - No inning data available from any source`);
 						}
 
 						// For Final games, ensure we have 9 innings of data
 						// If the game is marked as Final in the schedule, it should have complete data
 						if (scheduleStatus === 'Final' && innings.length > 0 && innings.length < 9) {
-							console.log(
-								`Game ${gamePk} - Final game with only ${innings.length} innings, filling in missing innings with zeros`
-							);
-
 							// Fill in missing innings with zeros up to 9 innings
 							const filledInnings: Array<{ inning: number; away_runs: number; home_runs: number }> = [];
 							for (let i = 1; i <= 9; i++) {
@@ -2211,7 +1889,6 @@ export async function getGamesForDate(date: string): Promise<Game[]> {
 								}
 							}
 							innings = filledInnings;
-							console.log(`Game ${gamePk} - Filled innings to 9:`, innings);
 						}
 					} catch (feedError) {
 						// Game feed not available (likely scheduled game that hasn't started)
@@ -2398,20 +2075,15 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 
 				// First try to get inning data from the schedule API (which now includes linescore)
 				if (gameData.linescore && gameData.linescore.innings && gameData.linescore.innings.length > 0) {
-					console.log(`Game ${gameData.gamePk} - Using linescore data from schedule API:`, gameData.linescore.innings);
-
 					inningList = gameData.linescore.innings.map((inning: any) => ({
 						inning: inning.num,
 						away_runs: inning.away?.runs || 0,
 						home_runs: inning.home?.runs || 0,
 					}));
-
-					console.log(`Game ${gameData.gamePk} - Processed innings from schedule API:`, inningList);
 				}
 				// Always fetch detailed game feed data for comprehensive player stats and play-by-play
 				try {
 					const gamePk = gameData.gamePk;
-					console.log(`Attempting to fetch game feed for game PK: ${gamePk}`);
 
 					if (gamePk) {
 						const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
@@ -2435,49 +2107,6 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 							30 * 1000 // 30 seconds TTL for live game feeds
 						);
 
-						// Extract comprehensive data from game feed
-						console.log('Game feed data structure:', {
-							hasLiveData: !!gameFeedData.liveData,
-							hasBoxscore: !!gameFeedData.liveData?.boxscore,
-							hasTeams: !!gameFeedData.liveData?.boxscore?.teams,
-							hasAwayTeam: !!gameFeedData.liveData?.boxscore?.teams?.away,
-							hasHomeTeam: !!gameFeedData.liveData?.boxscore?.teams?.home,
-							playersCount: Object.keys(gameFeedData.gameData?.players || {}).length,
-						});
-
-						// Debug the actual structure of team data
-						if (gameFeedData.liveData?.boxscore?.teams) {
-							const awayTeam = gameFeedData.liveData.boxscore.teams.away;
-							const homeTeam = gameFeedData.liveData.boxscore.teams.home;
-
-							console.log('Away team structure:', {
-								keys: Object.keys(awayTeam || {}),
-								hasBatters: !!awayTeam?.batters,
-								battersLength: awayTeam?.batters?.length || 0,
-								hasPitchers: !!awayTeam?.pitchers,
-								pitchersLength: awayTeam?.pitchers?.length || 0,
-								hasPlayers: !!awayTeam?.players,
-								playersLength: awayTeam?.players ? Object.keys(awayTeam.players).length : 0,
-								firstBatter: awayTeam?.batters?.[0]
-									? {
-											name: awayTeam.batters[0].person?.fullName,
-											hasStats: !!awayTeam.batters[0].stats,
-											statsKeys: awayTeam.batters[0].stats ? Object.keys(awayTeam.batters[0].stats) : [],
-									  }
-									: null,
-							});
-
-							console.log('Home team structure:', {
-								keys: Object.keys(homeTeam || {}),
-								hasBatters: !!homeTeam?.batters,
-								battersLength: homeTeam?.batters?.length || 0,
-								hasPitchers: !!homeTeam?.pitchers,
-								pitchersLength: homeTeam?.pitchers?.length || 0,
-								hasPlayers: !!homeTeam?.players,
-								playersLength: homeTeam?.players ? Object.keys(homeTeam.players).length : 0,
-							});
-						}
-
 						const linescore = gameFeedData.liveData?.linescore;
 						const boxscore = gameFeedData.liveData?.boxscore;
 						const allPlays = gameFeedData.liveData?.plays?.allPlays || [];
@@ -2499,143 +2128,18 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 								home: { batters: [], pitchers: [] },
 							};
 						if (boxscore && boxscore.teams) {
-							// Process substitution events from play-by-play
-							console.log('DEBUG: Total allPlays count:', allPlays.length);
-							console.log(
-								'DEBUG: Sample allPlays events:',
-								allPlays.slice(0, 10).map((play: any) => ({
-									eventType: play.result?.eventType,
-									description: play.result?.description,
-									hasPlayers: !!play.players,
-									playersCount: play.players?.length || 0,
-									// Check MLB API spec properties for substitutions
-									isSubstitution: play.isSubstitution,
-									hasSubstitution: !!play.substitution,
-									substitutionKeys: play.substitution ? Object.keys(play.substitution) : null,
-									about: play.about
-										? {
-												inning: play.about.inning,
-												halfInning: play.about.halfInning,
-										  }
-										: null,
-								}))
-							);
-
-							// Debug: Show all unique event types in allPlays
-							const eventTypes = allPlays.map((play: any) => play.result?.eventType).filter(Boolean);
-							const uniqueEventTypes = Array.from(new Set(eventTypes));
-							console.log('DEBUG: All unique event types in allPlays:', uniqueEventTypes);
-
-							// Debug: Check if there are other event types in the game feed
-							console.log('DEBUG: Game feed structure keys:', Object.keys(gameFeedData || {}));
 							if (gameFeedData?.liveData) {
-								console.log('DEBUG: LiveData keys:', Object.keys(gameFeedData.liveData));
 								if (gameFeedData.liveData.plays) {
-									console.log('DEBUG: Plays keys:', Object.keys(gameFeedData.liveData.plays));
-									// Check if there are substitution events in a different section
-									if (gameFeedData.liveData.plays.allPlays) {
-										const allEvents = gameFeedData.liveData.plays.allPlays;
-										const allEventTypes = allEvents.map((play: any) => play.result?.eventType).filter(Boolean);
-										const allUniqueEventTypes = Array.from(new Set(allEventTypes));
-										console.log('DEBUG: All event types in liveData.plays.allPlays:', allUniqueEventTypes);
-									}
-									// Check for substitution events in other play sections
-									if (gameFeedData.liveData.plays.substitutionEvents) {
-										console.log(
-											'DEBUG: Found substitutionEvents section:',
-											gameFeedData.liveData.plays.substitutionEvents
-										);
-									}
-									if (gameFeedData.liveData.plays.substitutions) {
-										console.log('DEBUG: Found substitutions section:', gameFeedData.liveData.plays.substitutions);
-									}
 									// Check playsByInning for substitution events using MLB API spec
 									if (gameFeedData.liveData.plays.playsByInning) {
-										console.log(
-											'DEBUG: playsByInning structure:',
-											Object.keys(gameFeedData.liveData.plays.playsByInning)
-										);
-
-										// Examine the structure of each inning
-										Object.entries(gameFeedData.liveData.plays.playsByInning).forEach(
-											([inningNum, inning]: [string, any]) => {
-												console.log(`DEBUG: Inning ${inningNum} structure:`, {
-													hasTop: !!inning.top,
-													hasBottom: !!inning.bottom,
-													topPlays: inning.top?.length || 0,
-													bottomPlays: inning.bottom?.length || 0,
-													topSample:
-														inning.top?.slice(0, 2).map((play: any) => ({
-															eventType: play.result?.eventType,
-															isSubstitution: play.isSubstitution,
-															hasSubstitution: !!play.substitution,
-															description: play.result?.description,
-														})) || [],
-													bottomSample:
-														inning.bottom?.slice(0, 2).map((play: any) => ({
-															eventType: play.result?.eventType,
-															isSubstitution: play.isSubstitution,
-															hasSubstitution: !!play.substitution,
-															description: play.result?.description,
-														})) || [],
-												});
-											}
-										);
-
 										// Look for substitution events in inning-by-inning data using API spec
 										const allInningEvents: any[] = [];
 										Object.values(gameFeedData.liveData.plays.playsByInning).forEach((inning: any) => {
 											if (inning.top) allInningEvents.push(...inning.top);
 											if (inning.bottom) allInningEvents.push(...inning.bottom);
 										});
-
-										const substitutionEventsInInnings = allInningEvents.filter(
-											(play: any) =>
-												// Use MLB API spec properties
-												play.isSubstitution === true ||
-												play.substitution !== undefined ||
-												// Fallback to event type and description
-												play.result?.eventType?.includes('substitution') ||
-												play.result?.description?.toLowerCase().includes('pinch') ||
-												play.result?.description?.toLowerCase().includes('sub')
-										);
-										console.log('DEBUG: Substitution events in playsByInning:', substitutionEventsInInnings.length);
-										if (substitutionEventsInInnings.length > 0) {
-											console.log(
-												'DEBUG: Sample substitution events from playsByInning:',
-												substitutionEventsInInnings.slice(0, 3).map((play: any) => ({
-													eventType: play.result?.eventType,
-													isSubstitution: play.isSubstitution,
-													substitution: play.substitution,
-													description: play.result?.description,
-													about: play.about,
-												}))
-											);
-										}
 									}
 								}
-							}
-
-							// Debug: Show events that might be substitutions
-							const possibleSubstitutions = allPlays.filter((play: any) => {
-								const desc = play.result?.description?.toLowerCase() || '';
-								return (
-									desc.includes('pinch') ||
-									desc.includes('sub') ||
-									desc.includes('replace') ||
-									play.result?.eventType?.toLowerCase().includes('sub')
-								);
-							});
-							console.log('DEBUG: Possible substitution events found:', possibleSubstitutions.length);
-							if (possibleSubstitutions.length > 0) {
-								console.log(
-									'DEBUG: Sample possible substitutions:',
-									possibleSubstitutions.slice(0, 3).map((play: any) => ({
-										eventType: play.result?.eventType,
-										description: play.result?.description,
-										about: play.about,
-									}))
-								);
 							}
 
 							// Debug: Look for substitution events using MLB API spec properties
@@ -2654,22 +2158,17 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 									play.result?.description?.includes('Pinch') ||
 									play.result?.description?.includes('Defensive Sub')
 							);
-							console.log('DEBUG: Found substitution events:', substitutionEvents.length);
-							console.log('DEBUG: Sample substitution events:', substitutionEvents.slice(0, 3));
+
 							const substitutionData = processSubstitutionEvents(substitutionEvents);
-							console.log('DEBUG: Processed substitution data:', substitutionData.size, 'entries');
 
 							// Since no substitution events found in play-by-play, derive timing from boxscore data
 							if (substitutionData.size === 0) {
-								console.log('DEBUG: No substitution events found in play-by-play, deriving from boxscore data');
 								const derivedSubstitutionData = deriveSubstitutionTimingFromBoxscore(boxscore, allPlays);
-								console.log('DEBUG: Derived substitution data from boxscore:', derivedSubstitutionData.size, 'entries');
 
 								// Merge derived data with existing substitution data
 								derivedSubstitutionData.forEach((value, key) => {
 									substitutionData.set(key, value);
 								});
-								console.log('DEBUG: Final combined substitution data:', substitutionData.size, 'entries');
 
 								// Apply substitution timing data to individual players in the boxscore
 								substitutionData.forEach((subData, playerName) => {
@@ -2681,11 +2180,6 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 												player.substitution_inning = subData.inning;
 												player.substitution_half_inning = subData.halfInning;
 												player.substitution_type = subData.type;
-												console.log(`DEBUG: Applied substitution data to ${playerName}:`, {
-													inning: subData.inning,
-													halfInning: subData.halfInning,
-													type: subData.type,
-												});
 											}
 										});
 									});
@@ -2706,51 +2200,6 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 											}
 										});
 									});
-								});
-							}
-
-							// Debug: Look at player data to see if we can identify substitutions from boxscore
-							console.log(
-								'DEBUG: Away team batters with substitution info:',
-								boxscore.teams.away.batters.slice(0, 5).map((batterId: any) => {
-									const player = boxscore.teams.away.players[`ID${batterId}`];
-									return {
-										name: player?.person?.fullName,
-										isSubstitute: player?.gameStatus?.isSubstitute,
-										allPositions: player?.allPositions?.map((p: any) => ({ code: p.code, name: p.name })),
-										battingOrder: player?.battingOrder,
-										gameStatus: player?.gameStatus,
-										// Check for substitution timing data
-										substitutionInning: player?.substitutionInning,
-										substitutionHalfInning: player?.substitutionHalfInning,
-										// Check all player properties for timing data
-										playerKeys: Object.keys(player || {}),
-									};
-								})
-							);
-
-							// Debug: Show detailed player data structure for first player with substitutions
-							const firstSubPlayer = boxscore.teams.away.batters.find((batterId: any) => {
-								const player = boxscore.teams.away.players[`ID${batterId}`];
-								return player?.allPositions && player.allPositions.length > 1;
-							});
-							if (firstSubPlayer) {
-								const player = boxscore.teams.away.players[`ID${firstSubPlayer}`];
-								console.log('DEBUG: Detailed player data for first substitution player:', {
-									name: player?.person?.fullName,
-									allPositions: player?.allPositions,
-									gameStatus: player?.gameStatus,
-									stats: player?.stats,
-									seasonStats: player?.seasonStats,
-									allKeys: Object.keys(player || {}),
-									// Check specific properties that might contain timing
-									substitutionData: {
-										substitutionInning: player?.substitutionInning,
-										substitutionHalfInning: player?.substitutionHalfInning,
-										substitutionType: player?.substitutionType,
-										entryInning: player?.entryInning,
-										exitInning: player?.exitInning,
-									},
 								});
 							}
 
@@ -2787,28 +2236,12 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 						};
 						const playByPlayData = processPlayByPlayData(allPlays, allTeamPlayers);
 
-						// playByPlayData is already converted to plain objects by processPlayByPlayData
-						console.log('DEBUG: playByPlayData structure:', {
-							atBatsKeys: Object.keys(playByPlayData.atBats || {}),
-							atBatsCount: Object.keys(playByPlayData.atBats || {}).length,
-							substitutionsKeys: Object.keys(playByPlayData.substitutions || {}),
-							substitutionsCount: Object.keys(playByPlayData.substitutions || {}).length,
-							errorsKeys: Object.keys(playByPlayData.errors || {}),
-							errorsCount: Object.keys(playByPlayData.errors || {}).length,
-						});
-
 						const playByPlayDataForUI = playByPlayData;
 
 						// If no errors found in play-by-play, try to extract from linescore data
 						if (Object.keys(playByPlayData.errors || {}).length === 0 && linescore && linescore.innings) {
-							console.log('DEBUG: No errors found in play-by-play, checking linescore data...');
 							linescore.innings.forEach((inning: any) => {
 								if (inning.home?.errors > 0 || inning.away?.errors > 0) {
-									console.log(`DEBUG: Found errors in linescore for inning ${inning.num}:`, {
-										home: inning.home?.errors,
-										away: inning.away?.errors,
-									});
-
 									// Add errors from linescore data
 									if (inning.home?.errors > 0) {
 										const errorKey = `${inning.num}-bottom`;
@@ -2847,15 +2280,6 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 							});
 						}
 
-						console.log('Final player stats before return:', {
-							awayBatters: playerStats.away.batters.length,
-							awayPitchers: playerStats.away.pitchers.length,
-							homeBatters: playerStats.home.batters.length,
-							homePitchers: playerStats.home.pitchers.length,
-							awayPitcherNames: playerStats.away.pitchers.map((p) => p.name),
-							homePitcherNames: playerStats.home.pitchers.map((p) => p.name),
-						});
-
 						// Extract supplementary game information
 						const umpires = extractUmpires(gameFeedData);
 
@@ -2878,24 +2302,14 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 
 						// Extract substitution events from game feed allPlays
 						const substitutionEvents = extractSubstitutionEventsFromGameFeed(gameFeedData);
-						console.log('DEBUG: Found substitution events in game feed:', substitutionEvents.length);
 
 						// Process substitution events into our format
 						const processedSubstitutions = processGameFeedSubstitutions(substitutionEvents, gameFeedData);
-						console.log('DEBUG: Processed game feed substitutions:', processedSubstitutions.length, 'events');
 
 						// NOW apply the game feed substitution data to the player data
 						if (processedSubstitutions && processedSubstitutions.length > 0) {
-							console.log('DEBUG: Applying game feed substitution data to player stats');
 							processedSubstitutions.forEach((sub: any) => {
 								const playerName = sub.substitutingPlayer;
-								console.log(`DEBUG: Applying game feed substitution for ${playerName}:`, {
-									type: sub.type,
-									inning: sub.inning,
-									halfInning: sub.halfInning,
-									position: sub.position,
-									battingOrder: sub.battingOrder,
-								});
 
 								// Find and update the player in both teams
 								[
@@ -2913,7 +2327,6 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 												player.substitution_description = sub.description;
 												player.substitution_position = sub.position;
 												player.substitution_batting_order = sub.battingOrder;
-												console.log(`DEBUG: Updated player ${playerName} with game feed substitution data`);
 											}
 										});
 									}
@@ -2961,19 +2374,9 @@ export async function getGameDetails(gameId: string): Promise<GameData> {
 							success: true,
 						};
 
-						console.log('Returning detailed game data with play-by-play:', {
-							hasPlayByPlay: !!playByPlayData,
-							atBatsCount: Object.keys(playByPlayData?.atBats || {}).length,
-							substitutionsCount: Object.keys(playByPlayData?.substitutions || {}).length,
-							hasLiveData: !!gameFeedData.liveData,
-							hasAllPlays: !!gameFeedData.liveData?.plays?.allPlays,
-							allPlaysCount: gameFeedData.liveData?.plays?.allPlays?.length || 0,
-						});
-
 						return detailedGameData;
 					}
 				} catch (feedError) {
-					console.log(`Error fetching detailed data for game ${gameData.gamePk}:`, feedError);
 					console.log('Error details:', {
 						message: (feedError as Error).message,
 						stack: (feedError as Error).stack,
@@ -3436,8 +2839,6 @@ export async function getGameDetailsSimple(gameId: string): Promise<any> {
 	const homeCode = parts[4];
 	const gameNumber = parseInt(parts[5], 10);
 
-	console.log('*** getGameDetailsSimple FUNCTION CALLED - USING ONLY MLB API ***');
-
 	const scheduleUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=game,linescore,team,weather,gameInfo,venue,decisions`;
 
 	const scheduleResponse = await fetch(scheduleUrl, {
@@ -3495,15 +2896,11 @@ export async function getGameDetailsSimple(gameId: string): Promise<any> {
 	let inningList: any[] = [];
 
 	if (gameData.linescore && gameData.linescore.innings && gameData.linescore.innings.length > 0) {
-		console.log(`Game ${gameData.gamePk} - Using linescore data from schedule API:`, gameData.linescore.innings);
-
 		inningList = gameData.linescore.innings.map((inning: any) => ({
 			inning: inning.num,
 			away_runs: inning.away?.runs || 0,
 			home_runs: inning.home?.runs || 0,
 		}));
-
-		console.log(`Game ${gameData.gamePk} - Processed innings from schedule API:`, inningList);
 	} else {
 		// Fallback to 9 empty innings if no linescore data
 		inningList = Array.from({ length: 9 }, (_, i) => ({
@@ -3511,7 +2908,6 @@ export async function getGameDetailsSimple(gameId: string): Promise<any> {
 			away_runs: 0,
 			home_runs: 0,
 		}));
-		console.log(`Game ${gameData.gamePk} - Using fallback innings data:`, inningList);
 	}
 
 	// Fetch supplementary data from game feed (umpires, managers, etc.)
@@ -3522,7 +2918,6 @@ export async function getGameDetailsSimple(gameId: string): Promise<any> {
 
 	try {
 		const gamePk = gameData.gamePk;
-		console.log(`Fetching supplementary data from game feed for game PK: ${gamePk}`);
 
 		if (gamePk) {
 			const gameFeedCacheKey = createCacheKey('gameFeed', gamePk.toString());
@@ -3561,16 +2956,8 @@ export async function getGameDetailsSimple(gameId: string): Promise<any> {
 
 			weather = extractWeather(gameFeedData);
 			uniforms = await extractUniforms(awayTeamId, homeTeamId);
-
-			console.log('Extracted supplementary data:', {
-				umpiresCount: umpires.length,
-				managers: managers,
-				weather: weather,
-				uniforms: uniforms,
-			});
 		}
 	} catch (supplementaryError) {
-		console.log(`Error fetching supplementary data for game ${gameData.gamePk}:`, supplementaryError);
 		// Continue with empty supplementary data
 	}
 
@@ -3609,12 +2996,6 @@ export async function getGameDetailsSimple(gameId: string): Promise<any> {
 		success: true,
 	};
 
-	console.log('Returning simplified game data:', {
-		gameId: simplifiedGameData.game_id,
-		inningCount: simplifiedGameData.game_data.inning_list.length,
-		firstThreeInnings: simplifiedGameData.game_data.inning_list.slice(0, 3),
-	});
-
 	return simplifiedGameData;
 }
 
@@ -3626,27 +3007,10 @@ function extractSubstitutionEventsFromGameFeed(gameFeedData: any): any[] {
 	const substitutionEvents: any[] = [];
 
 	if (!gameFeedData?.liveData?.plays?.allPlays) {
-		console.log('DEBUG: No allPlays data found in game feed');
 		return substitutionEvents;
 	}
 
 	const allPlays = gameFeedData.liveData.plays.allPlays;
-	console.log('DEBUG: Processing allPlays array with', allPlays.length, 'events');
-
-	// Debug: Let's examine the structure of a few plays to understand the format
-	console.log(
-		'DEBUG: Sample play structure:',
-		allPlays.slice(0, 2).map((play: any) => ({
-			hasRunners: !!play.runners,
-			runnersLength: play.runners?.length || 0,
-			hasActions: !!play.actions,
-			actionsLength: play.actions?.length || 0,
-			hasPlayEvents: !!play.playEvents,
-			playEventsLength: play.playEvents?.length || 0,
-			playType: play.type,
-			about: play.about,
-		}))
-	);
 
 	for (const play of allPlays) {
 		// Check if this play has substitution events in playEvents
@@ -3659,14 +3023,6 @@ function extractSubstitutionEventsFromGameFeed(gameFeedData: any): any[] {
 						eventType === 'defensive_substitution' ||
 						eventType === 'offensive_substitution'
 					) {
-						console.log('DEBUG: Found substitution event in playEvents:', {
-							eventType,
-							description: playEvent.details.description,
-							inning: play.about?.inning,
-							halfInning: play.about?.halfInning,
-							index: playEvent.index,
-						});
-
 						substitutionEvents.push({
 							...playEvent,
 							inning: play.about?.inning,
@@ -3679,7 +3035,6 @@ function extractSubstitutionEventsFromGameFeed(gameFeedData: any): any[] {
 		}
 	}
 
-	console.log('DEBUG: Extracted', substitutionEvents.length, 'substitution events');
 	return substitutionEvents;
 }
 
@@ -3722,7 +3077,6 @@ function processGameFeedSubstitutions(substitutionEvents: any[], gameFeedData: a
 			chronologicalOrder: event.atBatIndex || 0,
 		};
 
-		console.log('DEBUG: Processed substitution:', processedSubstitution);
 		processedSubstitutions.push(processedSubstitution);
 	}
 

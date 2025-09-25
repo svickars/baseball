@@ -221,19 +221,6 @@ class ResourceManager {
 		if (stats.totalSize > this.memoryThreshold) {
 			this.cleanupByMemory();
 		}
-
-		// Log memory usage
-		if (stats.resourceCount > 0) {
-			console.log('Resource Manager Stats:', {
-				totalSize: this.formatBytes(stats.totalSize),
-				resourceCount: stats.resourceCount,
-				byType: Object.entries(stats.byType).map(([type, data]) => ({
-					type,
-					count: data.count,
-					size: this.formatBytes(data.size),
-				})),
-			});
-		}
 	}
 
 	// Set memory threshold

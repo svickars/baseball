@@ -202,7 +202,6 @@ await imageOptimizer.preloadImages(['/images/team1.webp', '/images/team2.webp'])
 
 // Get cache statistics
 const stats = imageOptimizer.getCacheStats();
-console.log(`Cache size: ${stats.size}, Count: ${stats.count}`);
 ```
 
 ### Resource Monitor Configuration

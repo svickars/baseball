@@ -55,6 +55,7 @@ export default function GameDetailPage() {
 
 			if (originalGame) {
 				setOriginalGame(originalGame);
+				console.log('🎮 Game loaded - gamePk:', originalGame.game_pk);
 			}
 
 			setGameData(gameDetails);
