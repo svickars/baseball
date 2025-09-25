@@ -1935,15 +1935,6 @@ const enhanceSubstitutionDataWithPlayByPlay = (batters: any[], detailedData: any
 		// Debug: Log name matching for home team
 		if (batters.length <= 15) {
 			// Home team typically has fewer batters
-			console.log(`DEBUG: Name matching for substitution:`, {
-				replacedPlayerName,
-				substitutingPlayerName,
-				replacedBatterFound: !!replacedBatter,
-				replacedBatterName: replacedBatter?.name,
-				substitutingBatterFound: !!substitutingBatter,
-				substitutingBatterName: substitutingBatter?.name,
-				availableBatterNames: batters.map((b) => b.name),
-			});
 		}
 
 		const substitutionInfo = {
@@ -1972,7 +1963,6 @@ const enhanceSubstitutionDataWithPlayByPlay = (batters: any[], detailedData: any
 	return batters.map((batter) => {
 		const substitutionData = substitutionMap.get(batter.name);
 		if (substitutionData) {
-			console.log(`DEBUG: Enhancing batter ${batter.name} with substitution data:`, substitutionData);
 			return {
 				...batter,
 				substitution_type: substitutionData.type,
@@ -2003,27 +1993,8 @@ const processBatterData = (
 
 	// Debug: Check if home team batters are getting enhanced
 	if (!isAway) {
-		console.log(
-			'DEBUG: HOME team enhancement results:',
-			enhancedBatters.map((b) => ({
-				name: b.name,
-				hasSubstitutionDescription: !!b.substitution_description,
-				substitutionDescription: b.substitution_description,
-				substitutionType: b.substitution_type,
-				substitutionInning: b.substitution_inning,
-				substitutionHalfInning: b.substitution_half_inning,
-			}))
-		);
-
 		// Also log which home team batters have substitution data
 		const homeSubstitutes = enhancedBatters.filter((b) => b.substitution_description);
-		console.log(
-			'DEBUG: HOME team substitutes with descriptions:',
-			homeSubstitutes.map((b) => ({
-				name: b.name,
-				description: b.substitution_description,
-			}))
-		);
 	}
 
 	// Create lookup map for substitution types from processed data
@@ -2123,13 +2094,6 @@ const processBatterData = (
 
 				// Debug: Log home team substitution processing
 				if (!isAway) {
-					console.log(`DEBUG: HOME team processing substitution for ${sub.name}:`, {
-						hasSubstitutionDescription: !!sub.substitution_description,
-						substitutionDescription: sub.substitution_description,
-						substitutionType: sub.substitution_type,
-						substitutionInning: sub.substitution_inning,
-						substitutionHalfInning: sub.substitution_half_inning,
-					});
 				}
 
 				// Use enhanced substitution data from game feed if available
@@ -2182,10 +2146,7 @@ const processBatterData = (
 					const chronologicalOrder = sub.substitution_order || allSubstitutions.length + 1;
 					allSubstitutions.push({ footnote: cleanFootnote, order: chronologicalOrder });
 					footnote = cleanFootnote;
-					console.log('DEBUG: Using clean game feed footnote from enhanced data:', cleanFootnote);
 				} else {
-					console.error('ERROR: No game feed substitution description found in enhanced data for:', sub.name);
-					console.log('DEBUG: Enhanced sub object keys:', Object.keys(sub));
 				}
 
 				substitutions.push({
@@ -3684,10 +3645,6 @@ const BatterRow = ({
 						) || [];
 
 					if (substitutionsInThisInning.length > 0) {
-						console.log(
-							`DEBUG: Found ${substitutionsInThisInning.length} substitutions in inning ${inningNumber} for ${batter.name}:`,
-							substitutionsInThisInning
-						);
 					}
 
 					// Render columns for this inning (1 or 2 columns)
@@ -3752,17 +3709,8 @@ const BatterRow = ({
 							<div
 								key={`${inningNumber}-${columnIndex}`}
 								className={`flex relative justify-center items-center group h-fill w-fill cursor-crosshair hover:bg-primary-100 dark:hover:bg-primary-700 ${borderClass}`}
-								onMouseEnter={() => {
-									console.log(
-										`🖱️ DEBUG: Mouse entered at-bat cell for ${batter.name} in inning ${inningNumber}, column ${columnIndex}`
-									);
-									if (batter.name === 'Bobby Witt Jr.') {
-										console.log(`🖱️ DEBUG: Bobby Witt Jr. cell hovered - atBatResult:`, atBatResult);
-									}
-								}}
-								onMouseLeave={() => {
-									console.log(`🖱️ DEBUG: Mouse left at-bat cell for ${batter.name}`);
-								}}>
+								onMouseEnter={() => {}}
+								onMouseLeave={() => {}}>
 								{/* Diamond grid background - only show when there's at-bat data */}
 								{atBatResult &&
 									(() => {
@@ -3820,7 +3768,6 @@ const BatterRow = ({
 								{/* Debug: Check if atBatResult exists for Bobby Witt Jr. */}
 								{batter.name === 'Bobby Witt Jr.' &&
 									(() => {
-										console.log(`🔍 DEBUG: Bobby Witt Jr. at-bat cell - atBatResult:`, atBatResult);
 										return null;
 									})()}
 
@@ -4221,13 +4168,8 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 							detailedGameData
 						),
 						home: (() => {
-							console.log('DEBUG: Processing HOME team batters with enhanced data');
 							const homeBatters = detailedGameData.game_data.player_stats?.home?.batters || [];
-							console.log(
-								'DEBUG: HOME batters before enhancement:',
-								homeBatters.length,
-								homeBatters.map((b) => b.name)
-							);
+
 							return processBatterData(
 								homeBatters,
 								detailedGameData.game_data.player_stats?.home?.pitchers || [],
@@ -4239,56 +4181,16 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 					};
 				})(),
 				pitchers: (() => {
-					console.log('Processing pitcher data:', {
-						hasAwayPitchers: !!detailedGameData.game_data.player_stats?.away?.pitchers,
-						awayPitchersCount: detailedGameData.game_data.player_stats?.away?.pitchers?.length || 0,
-						hasHomePitchers: !!detailedGameData.game_data.player_stats?.home?.pitchers,
-						homePitchersCount: detailedGameData.game_data.player_stats?.home?.pitchers?.length || 0,
-						playerStats: detailedGameData.game_data.player_stats,
-					});
-
 					// Debug: Log the actual pitcher data we're receiving
 					if (detailedGameData.game_data.player_stats?.away?.pitchers) {
-						console.log(
-							'Away pitchers raw data (full objects):',
-							detailedGameData.game_data.player_stats.away.pitchers
-						);
-						console.log(
-							'Away pitchers summary:',
-							detailedGameData.game_data.player_stats.away.pitchers.map((p) => ({
-								name: p.name,
-								innings_pitched: p.innings_pitched,
-								era: p.era,
-								number: (p as any).jersey_number || (p as any).number || '0',
-								allKeys: Object.keys(p),
-							}))
-						);
-
 						// Log the first pitcher object in detail
 						if (detailedGameData.game_data.player_stats.away.pitchers.length > 0) {
-							console.log('First away pitcher object:', detailedGameData.game_data.player_stats.away.pitchers[0]);
 						}
 					}
 
 					if (detailedGameData.game_data.player_stats?.home?.pitchers) {
-						console.log(
-							'Home pitchers raw data (full objects):',
-							detailedGameData.game_data.player_stats.home.pitchers
-						);
-						console.log(
-							'Home pitchers summary:',
-							detailedGameData.game_data.player_stats.home.pitchers.map((p) => ({
-								name: p.name,
-								innings_pitched: p.innings_pitched,
-								era: p.era,
-								number: (p as any).jersey_number || (p as any).number || '0',
-								allKeys: Object.keys(p),
-							}))
-						);
-
 						// Log the first pitcher object in detail
 						if (detailedGameData.game_data.player_stats.home.pitchers.length > 0) {
-							console.log('First home pitcher object:', detailedGameData.game_data.player_stats.home.pitchers[0]);
 						}
 					}
 
@@ -4302,15 +4204,6 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 						detailedGameData.game_data.player_stats?.home?.pitchers &&
 						detailedGameData.game_data.player_stats.home.pitchers.length > 0 &&
 						detailedGameData.game_data.player_stats.home.pitchers.some((p) => p.name && p.name !== 'Unknown Pitcher');
-
-					console.log('Pitcher validation:', {
-						hasAwayPitchers: !!detailedGameData.game_data.player_stats?.away?.pitchers,
-						awayPitchersLength: detailedGameData.game_data.player_stats?.away?.pitchers?.length,
-						hasValidAwayPitchers,
-						hasHomePitchers: !!detailedGameData.game_data.player_stats?.home?.pitchers,
-						homePitchersLength: detailedGameData.game_data.player_stats?.home?.pitchers?.length,
-						hasValidHomePitchers,
-					});
 
 					return hasValidAwayPitchers && hasValidHomePitchers
 						? {
@@ -4409,29 +4302,13 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 				liveData: (() => {
 					// liveData is at the top level of detailedGameData, not inside game_data
 					const liveData = detailedGameData.liveData;
-					console.log('DEBUG: Setting liveData in transformedData:', {
-						hasLiveData: !!liveData,
-						hasPlays: !!liveData?.plays,
-						hasAllPlays: !!liveData?.plays?.allPlays,
-						allPlaysLength: liveData?.plays?.allPlays?.length || 0,
-						liveDataKeys: liveData ? Object.keys(liveData) : [],
-						detailedGameDataKeys: Object.keys(detailedGameData),
-					});
+
 					return liveData;
 				})(),
 			};
 
-			console.log('DEBUG: Final transformedData structure:', {
-				hasLiveData: !!transformedData.liveData,
-				hasPlays: !!transformedData.liveData?.plays,
-				hasAllPlays: !!transformedData.liveData?.plays?.allPlays,
-				allPlaysLength: transformedData.liveData?.plays?.allPlays?.length || 0,
-				transformedDataKeys: Object.keys(transformedData),
-			});
-
 			setDetailedData(transformedData);
 		} catch (error) {
-			console.error('Error fetching detailed data:', error);
 		} finally {
 			setLoading(false);
 		}
@@ -4918,11 +4795,6 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 
 											// Debug logging
 											if (inningNumber <= 3) {
-												console.log(`Away Inning ${inningNumber}:`, {
-													inningRuns,
-													detailedDataInnings: detailedData.innings,
-													detailedDataKeys: Object.keys(detailedData),
-												});
 											}
 
 											// For hits, calculate from ALL at-bat results in this inning (including "b" columns)
@@ -5220,11 +5092,6 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 
 											// Debug logging
 											if (inningNumber <= 3) {
-												console.log(`Home Inning ${inningNumber}:`, {
-													inningRuns,
-													detailedDataInnings: detailedData.innings,
-													detailedDataKeys: Object.keys(detailedData),
-												});
 											}
 
 											// For hits, calculate from ALL at-bat results in this inning (including "b" columns)
@@ -5305,7 +5172,6 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 	// Helper function to render away team footnotes
 	const renderAwayFootnotes = () => {
 		if (!detailedData) {
-			console.log('DEBUG: No detailedData for away footnotes');
 			return null;
 		}
 
@@ -5313,14 +5179,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 		const awayFootnotes: Array<{ footnote: string; order: number }> = [];
 
 		detailedData.batters.away.forEach((batter) => {
-			console.log(`DEBUG: Processing batter ${batter.name}, substitutions:`, batter.substitutions);
 			batter.substitutions?.forEach((sub) => {
-				console.log(`DEBUG: Substitution for ${batter.name}:`, {
-					footnote: sub.footnote,
-					substitution_order: sub.substitution_order,
-					substitution_type: sub.substitution_type,
-					substitution_inning: sub.substitution_inning,
-				});
 				if (sub.footnote) {
 					// Check if this footnote is already collected (avoid duplicates)
 					const existingIndex = awayFootnotes.findIndex((f) => f.footnote === sub.footnote);
@@ -5341,8 +5200,6 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 
 		// Sort by chronological order
 		awayFootnotes.sort((a, b) => a.order - b.order);
-
-		console.log('DEBUG: Away footnotes found:', awayFootnotes.length, awayFootnotes);
 
 		if (awayFootnotes.length === 0) return null;
 

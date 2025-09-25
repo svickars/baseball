@@ -44,8 +44,7 @@ export function useBaseballApp() {
 
 			if (response.success) {
 				perf.start('processGamesData');
-				console.log('API Response:', response);
-				console.log('Games count:', response.games?.length);
+
 				perf.start('setGames');
 				setGames(response.games);
 				perf.end('setGames');
@@ -274,14 +273,12 @@ export function useBaseballApp() {
 	// Load games on mount with current date
 	useEffect(() => {
 		const today = getTodayLocalDate();
-		console.log('Loading games for date:', today, 'Current date object:', new Date());
 		loadGames(today);
 	}, [loadGames]);
 
 	// Log performance summary after initial load
 	useEffect(() => {
 		if (games.length > 0) {
-			console.log('Games state updated:', games.length, 'games');
 			setTimeout(() => {
 				performanceDiagnostic.logSummary();
 			}, 1000);
