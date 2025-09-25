@@ -132,6 +132,7 @@ export interface GameData {
 				}>;
 			};
 		};
+		liveData?: any;
 	};
 	svg_content: string;
 	success: boolean;
@@ -182,6 +183,7 @@ export interface DetailedGameData {
 		away: string | null;
 		home: string | null;
 	};
+	liveData?: any;
 }
 
 export interface GamesResponse {

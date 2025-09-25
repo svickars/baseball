@@ -16,16 +16,29 @@
    - **Solution**: Always specify types: `const array: Array<Type> = []`
    - **Search Pattern**: `grep -n "const.*= \[\];" web_app/lib/baseball-service.ts`
 
-3. **Common Problematic Patterns to Fix**:
+3. **Object Type Assignment Issues** ⚠️
+
+   - **Problem**: Assigning empty object `{}` to typed interfaces causes compilation errors
+   - **Solution**: Always provide complete object structure with required properties
+   - **Search Pattern**: `grep -n "= {};" web_app/components/`
+
+4. **Common Problematic Patterns to Fix**:
 
    ```typescript
    // ❌ WRONG - Causes compilation errors
    const uniqueValues = [...new Set(values)];
    const myArray = [];
+   detailedData.play_by_play = {}; // Missing required properties
 
    // ✅ CORRECT - Works with all TypeScript targets
    const uniqueValues = Array.from(new Set(values));
    const myArray: Array<MyType> = [];
+   detailedData.play_by_play = {
+   	atBats: {},
+   	substitutions: {},
+   	inningResults: {},
+   	errors: {},
+   };
    ```
 
 ### Pre-Deployment Verification Steps
@@ -49,6 +62,10 @@
    # Check for untyped arrays
    grep -r "const.*= \[\];" web_app/
    grep -r "let.*= \[\];" web_app/
+
+   # Check for empty object assignments to typed interfaces
+   grep -r "= {};" web_app/components/
+   grep -r "= {};" web_app/lib/
    ```
 
 3. **Linting Check**
@@ -219,6 +236,12 @@ If deployment fails due to TypeScript errors:
 
 - **Cause**: TypeScript can't infer array element types
 - **Fix**: Add proper type annotations to array declarations
+
+### "Type '{}' is missing the following properties from type 'InterfaceName'"
+
+- **Cause**: Assigning empty object `{}` to typed interface
+- **Fix**: Provide complete object structure with all required properties
+- **Example**: `detailedData.play_by_play = { atBats: {}, substitutions: {}, inningResults: {}, errors: {} };`
 
 ---
 

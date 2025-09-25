@@ -857,9 +857,24 @@ const processSequentialGameState = (
 		detailedData.game_data.game_feed_substitutions.forEach((sub: any, index: number) => {});
 		// Override the play_by_play substitutions with game feed data
 		if (!detailedData.game_data.play_by_play) {
-			detailedData.game_data.play_by_play = {};
+			detailedData.game_data.play_by_play = {
+				atBats: {},
+				substitutions: {},
+				inningResults: {},
+				errors: {},
+			};
 		}
-		detailedData.game_data.play_by_play.substitutions = detailedData.game_data.game_feed_substitutions;
+		// Convert game_feed_substitutions array to the expected substitutions object format
+		// Group substitutions by inning-halfInning key
+		const substitutionsByInning: { [key: string]: any[] } = {};
+		detailedData.game_data.game_feed_substitutions.forEach((sub: any) => {
+			const key = `${sub.inning}-${sub.halfInning}`;
+			if (!substitutionsByInning[key]) {
+				substitutionsByInning[key] = [];
+			}
+			substitutionsByInning[key].push(sub);
+		});
+		detailedData.game_data.play_by_play.substitutions = substitutionsByInning;
 	} else {
 	}
 
@@ -1684,7 +1699,7 @@ const enhanceTripWithPinchRunnerMovements = (allPlays: any[], trip: BaseRunningT
 							// For playEvents substitutions, we need to find the parent play
 							let substitutionAtBatIndex = subPlay.about?.atBatIndex;
 							if (!substitutionAtBatIndex) {
-								const parentPlay = allPlays.find((p) => p.playEvents?.some((e) => e === subPlay));
+								const parentPlay = allPlays.find((p) => p.playEvents?.some((e: any) => e === subPlay));
 								substitutionAtBatIndex = parentPlay?.about.atBatIndex || trip.atBatIndex + 1;
 							}
 
@@ -4301,7 +4316,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 				// Include the liveData from the game feed for base running tracking
 				liveData: (() => {
 					// liveData is at the top level of detailedGameData, not inside game_data
-					const liveData = detailedGameData.liveData;
+					const liveData = (detailedGameData as any).liveData;
 
 					return liveData;
 				})(),
