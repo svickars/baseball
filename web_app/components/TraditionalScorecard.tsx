@@ -252,29 +252,17 @@ const getBaseSquareColor = (basePathViz: BasePathVisualization, basePosition: st
 		return BASE_PATH_COLORS.out; // Orange for outs
 	}
 
-	// Define base order for calculating intermediate bases
+	// Define base order for calculations
 	const baseOrder = ['Home', '1B', '2B', '3B', 'Home'];
+	const baseIndex = basePosition === 'Home' ? 4 : baseOrder.indexOf(basePosition);
 
-	// For Home base, we need to determine if we're looking at the starting Home (index 0) or scoring Home (index 4)
-	let baseIndex: number;
-	if (basePosition === 'Home') {
-		// Check if this is a scoring movement - look for movements that end at 'score' or 'Home'
-		const hasScoringMovement = basePathViz.path.some((movement) => movement.to === 'score' || movement.to === 'Home');
-		// If there's a scoring movement, use index 4 (scoring Home), otherwise index 0 (starting Home)
-		baseIndex = hasScoringMovement ? 4 : 0;
-	} else {
-		baseIndex = baseOrder.indexOf(basePosition);
-	}
-
-	// Check if this base was part of the player's path (including intermediate bases)
+	// Check if this base was reached at all
 	const wasReached = basePathViz.path.some((movement) => {
-		// Handle movement.to === 'score' by treating it as the scoring Home (index 4)
 		let movementToIndex = baseOrder.indexOf(movement.to);
 		if (movement.to === 'score') {
 			movementToIndex = 4; // Map 'score' to the second Home (scoring Home)
 		}
-
-		const fromIndex = baseOrder.indexOf(movement.from);
+		const movementFromIndex = baseOrder.indexOf(movement.from);
 
 		// Direct movement to this base
 		if (movementToIndex === baseIndex) {
@@ -282,10 +270,10 @@ const getBaseSquareColor = (basePathViz: BasePathVisualization, basePosition: st
 		}
 
 		// Intermediate base in a multi-base movement
-		if (fromIndex !== -1 && movementToIndex !== -1 && baseIndex !== -1) {
-			const minIndex = Math.min(fromIndex, movementToIndex);
-			const maxIndex = Math.max(fromIndex, movementToIndex);
-			return baseIndex > minIndex && baseIndex < maxIndex;
+		if (movementFromIndex !== -1 && movementToIndex !== -1 && baseIndex !== -1) {
+			const minIndex = Math.min(movementFromIndex, movementToIndex);
+			const maxIndex = Math.max(movementFromIndex, movementToIndex);
+			return baseIndex >= minIndex && baseIndex <= maxIndex;
 		}
 
 		return false;
@@ -295,15 +283,18 @@ const getBaseSquareColor = (basePathViz: BasePathVisualization, basePosition: st
 		return 'bg-primary-200 dark:bg-primary-700'; // Not reached
 	}
 
-	// Find the movement that determines the color for this base
-	const determiningMovement = basePathViz.path.find((movement) => {
-		// Handle movement.to === 'score' by treating it as the scoring Home (index 4)
+	// NEW LOGIC: Follow the user's approach
+	const initialMovement = basePathViz.path[0];
+
+	// Check if this base was reached in the initial at-bat
+	const reachedInInitialAtBat = basePathViz.path.some((movement) => {
+		if (movement.atBatIndex !== initialMovement.atBatIndex) return false;
+
 		let movementToIndex = baseOrder.indexOf(movement.to);
 		if (movement.to === 'score') {
-			movementToIndex = 4; // Map 'score' to the second Home (scoring Home)
+			movementToIndex = 4;
 		}
-
-		const fromIndex = baseOrder.indexOf(movement.from);
+		const movementFromIndex = baseOrder.indexOf(movement.from);
 
 		// Direct movement to this base
 		if (movementToIndex === baseIndex) {
@@ -311,120 +302,62 @@ const getBaseSquareColor = (basePathViz: BasePathVisualization, basePosition: st
 		}
 
 		// Intermediate base in a multi-base movement
-		if (fromIndex !== -1 && movementToIndex !== -1 && baseIndex !== -1) {
-			const minIndex = Math.min(fromIndex, movementToIndex);
-			const maxIndex = Math.max(fromIndex, movementToIndex);
+		if (movementFromIndex !== -1 && movementToIndex !== -1 && baseIndex !== -1) {
+			const minIndex = Math.min(movementFromIndex, movementToIndex);
+			const maxIndex = Math.max(movementFromIndex, movementToIndex);
 			return baseIndex >= minIndex && baseIndex <= maxIndex;
 		}
 
 		return false;
 	});
 
-	if (!determiningMovement) {
-		return 'bg-primary-200 dark:bg-primary-700'; // Not reached
-	}
+	// If reached in initial at-bat
+	if (reachedInInitialAtBat) {
+		// Check if they scored on their own at-bat (home run)
+		const scoredOnOwnAtBat = basePathViz.path.some(
+			(movement) =>
+				movement.atBatIndex === initialMovement.atBatIndex && (movement.to === 'score' || movement.to === 'Home')
+		);
 
-	// Check if this was reached in the initial at-bat (first movement)
-	const initialMovement = basePathViz.path[0];
-	const reachedInInitialAtBat = initialMovement === determiningMovement;
-
-	// Special case: Home plate scoring - green only if NOT reached in initial at-bat
-	// Check if this is the scoring Home (index 4) and they scored
-	if (basePosition === 'Home' && baseIndex === 4 && basePathViz.isScored && !reachedInInitialAtBat) {
-		return BASE_PATH_COLORS.score;
-	}
-
-	// Special case: If player scored on a subsequent play, color bases green ONLY if they're part of a continuous multi-base movement
-	if (basePathViz.isScored && !reachedInInitialAtBat) {
-		// Find the movement that directly led to scoring AND is relevant to this base
-		const scoringMovement = basePathViz.path.find((movement) => {
-			if (movement.to !== 'score' && movement.to !== 'Home') return false;
-
-			// Check if this scoring movement is relevant to the base we're coloring
-			const movementToIndex = movement.to === 'score' ? 4 : baseOrder.indexOf(movement.to);
-			const movementFromIndex = baseOrder.indexOf(movement.from);
-
-			// Check if this base is in the range of this movement
-			const minIndex = Math.min(movementFromIndex, movementToIndex);
-			const maxIndex = Math.max(movementFromIndex, movementToIndex);
-
-			return baseIndex >= minIndex && baseIndex <= maxIndex;
-		});
-
-		if (scoringMovement) {
-			// Build the complete continuous movement sequence for this scoring play
-			const continuousSequence: BaseRunningMovement[] = [];
-
-			// Start from the scoring movement and work backwards to find ALL consecutive movements from the same at-bat
-			let currentMovement = scoringMovement;
-			continuousSequence.push(currentMovement);
-
-			// Keep looking backwards for consecutive movements from the same at-bat
-			let foundPrevious = true;
-			while (foundPrevious) {
-				foundPrevious = false;
-				const prevMovement = basePathViz.path.find(
-					(movement) =>
-						movement.to === currentMovement.from &&
-						movement.atBatIndex === currentMovement.atBatIndex &&
-						!movement.event.toLowerCase().includes('stolen') &&
-						!continuousSequence.includes(movement) // Don't include the same movement twice
-				);
-
-				if (prevMovement) {
-					continuousSequence.unshift(prevMovement); // Add to beginning
-					currentMovement = prevMovement;
-					foundPrevious = true;
-				}
-			}
-
-			// Only color bases green if they're part of a TRUE continuous multi-base movement
-			// This means the sequence must span multiple bases in a single play
-			const hasMultiBaseMovement = continuousSequence.some((movement, index) => {
-				if (index === 0) return false; // Skip first movement
-				const prevMovement = continuousSequence[index - 1];
-				const fromIndex = baseOrder.indexOf(prevMovement.from);
-				const toIndex = movement.to === 'score' ? 4 : baseOrder.indexOf(movement.to);
-				return Math.abs(toIndex - fromIndex) > 1; // True multi-base movement
-			});
-
-			if (hasMultiBaseMovement) {
-				// Check if this base was part of the continuous sequence
-				const wasPartOfContinuousSequence = continuousSequence.some((movement) => {
-					const movementToIndex = movement.to === 'score' ? 4 : baseOrder.indexOf(movement.to);
-					const fromIndex = baseOrder.indexOf(movement.from);
-
-					// Direct movement to this base
-					if (movementToIndex === baseIndex) {
-						return true;
-					}
-
-					// Intermediate base in a multi-base movement
-					if (fromIndex !== -1 && movementToIndex !== -1 && baseIndex !== -1) {
-						const minIndex = Math.min(fromIndex, movementToIndex);
-						const maxIndex = Math.max(fromIndex, movementToIndex);
-						return baseIndex >= minIndex && baseIndex <= maxIndex;
-					}
-
-					return false;
-				});
-
-				if (wasPartOfContinuousSequence) {
-					return BASE_PATH_COLORS.score; // Green for bases involved in continuous multi-base scoring
-				}
-			}
+		if (scoredOnOwnAtBat) {
+			return BASE_PATH_COLORS.score; // Green for home runs
+		} else {
+			return BASE_PATH_COLORS.initial; // Dark for other initial at-bat bases
 		}
 	}
 
-	// Initial at-bat bases (including home runs) - bg-primary-900 overrides everything
-	if (reachedInInitialAtBat) {
-		return BASE_PATH_COLORS.initial; // bg-primary-900 for initial at-bat
-	}
+	// If reached on subsequent plays, check if they scored on that play
+	const scoringMovement = basePathViz.path.find((movement) => movement.to === 'score' || movement.to === 'Home');
 
-	// Check for pinch runner involvement
-	const hasPinchRunner = determiningMovement.isPinchRunner;
-	if (hasPinchRunner) {
-		return BASE_PATH_COLORS.pinchRunner;
+	if (scoringMovement) {
+		// Check if this base was part of the scoring play
+		const wasPartOfScoringPlay = basePathViz.path.some((movement) => {
+			if (movement.atBatIndex !== scoringMovement.atBatIndex) return false;
+
+			let movementToIndex = baseOrder.indexOf(movement.to);
+			if (movement.to === 'score') {
+				movementToIndex = 4;
+			}
+			const movementFromIndex = baseOrder.indexOf(movement.from);
+
+			// Direct movement to this base
+			if (movementToIndex === baseIndex) {
+				return true;
+			}
+
+			// Intermediate base in a multi-base movement
+			if (movementFromIndex !== -1 && movementToIndex !== -1 && baseIndex !== -1) {
+				const minIndex = Math.min(movementFromIndex, movementToIndex);
+				const maxIndex = Math.max(movementFromIndex, movementToIndex);
+				return baseIndex >= minIndex && baseIndex <= maxIndex;
+			}
+
+			return false;
+		});
+
+		if (wasPartOfScoringPlay) {
+			return BASE_PATH_COLORS.score; // Green for bases involved in scoring
+		}
 	}
 
 	// Default to advance color for subsequent movements
