@@ -164,6 +164,9 @@ const getMovementShorthand = (event: string, isOut: boolean = false, description
 	// Walk
 	if (eventLower.includes('walk') || eventLower.includes('bb')) return 'BB';
 
+	// Hit by pitch
+	if (eventLower.includes('hit by pitch') || eventLower.includes('hbp')) return 'HBP';
+
 	// Errors
 	if (eventLower.includes('error')) {
 		const errorMatch = event.match(/E(\d+)/);
@@ -1570,8 +1573,13 @@ const trackSingleAtBatBaseRunning = (allPlays: any[], atBat: any): BaseRunningTr
 	);
 
 	if (batterRunner) {
-		// For walks, show the proper movement notation
-		const eventDisplay = atBat.result.event === 'Walk' ? 'BB' : atBat.result.event;
+		// For walks and HBP, show the proper movement notation
+		let eventDisplay = atBat.result.event;
+		if (atBat.result.event === 'Walk') {
+			eventDisplay = 'BB';
+		} else if (atBat.result.event === 'Hit By Pitch' || atBat.result.eventType === 'hit_by_pitch') {
+			eventDisplay = 'Hit by pitch';
+		}
 
 		// Keep original event for tooltips, but generate shorthand for quadrant labels
 		const atBatResultShorthand = getMovementShorthand(atBat.result.event, false, atBat.result.description);
@@ -1652,6 +1660,11 @@ const formatMovementDisplay = (
 		// Handle walks
 		if (event.toLowerCase().includes('walk') || event.toLowerCase().includes('bb')) {
 			return 'Walks';
+		}
+
+		// Handle hit by pitch
+		if (event.toLowerCase().includes('hit by pitch') || event.toLowerCase().includes('hbp')) {
+			return 'Hit by pitch';
 		}
 
 		// Handle all hits and other ways to reach any base
@@ -2962,7 +2975,7 @@ const shouldUseCenterText = (atBatResult: string, description?: string): boolean
 		return true;
 	}
 
-	// For hits (singles, doubles, triples) and walks, use top-left positioning for labels
+	// For hits (singles, doubles, triples) and walks, use center text display
 	if (result.includes('1B') || result.includes('SINGLE')) {
 		return true;
 	} else if (result.includes('2B') || result.includes('DOUBLE') || result.includes('GROUND-RULE')) {
@@ -2973,7 +2986,7 @@ const shouldUseCenterText = (atBatResult: string, description?: string): boolean
 		return true;
 	}
 
-	// For all other plays (walks, errors, etc.), use corner labels only
+	// For all other plays (errors, etc.), use corner labels only
 	return false;
 };
 
@@ -3052,6 +3065,8 @@ const getEnhancedCenterText = (atBatResult: string, description?: string): strin
 		return '3B';
 	} else if (result.includes('BB') || result.includes('WALK')) {
 		return 'BB';
+	} else if (result.includes('HBP') || result.includes('HIT BY PITCH')) {
+		return 'HBP';
 	}
 
 	// For all other cases, return the original atBatResult
@@ -3102,6 +3117,7 @@ const extractPlayerNameFromDescription = (description: string): string => {
 				'pinch',
 				'replaces',
 				'substitution',
+				'hit by pitch',
 			];
 
 			let extractedName = afterOverturned.trim();
@@ -3121,7 +3137,7 @@ const extractPlayerNameFromDescription = (description: string): string => {
 
 	// Extract the first part before the first period, comma, or action verb
 	const match = description.match(
-		/^([^.,]+?)(?:\s+(?:grounds|flies|lines|pops|homers|singles|doubles|triples|walks|strikes|hits|reaches|advances|steals|caught|thrown|out|safe|scores|drives|swings|called|bunts|sacrifices|pinch|replaces|substitution))/i
+		/^([^.,]+?)(?:\s+(?:grounds|flies|lines|pops|homers|singles|doubles|triples|walks|strikes|hits|reaches|advances|steals|caught|thrown|out|safe|scores|drives|swings|called|bunts|sacrifices|pinch|replaces|substitution|hit by pitch))/i
 	);
 
 	if (match && match[1]) {
@@ -3511,7 +3527,9 @@ const isHit = (atBatResult: string): boolean => {
 		result.includes('HR') ||
 		result.includes('HOME RUN') ||
 		result.includes('BB') ||
-		result.includes('WALK')
+		result.includes('WALK') ||
+		result.includes('HBP') ||
+		result.includes('HIT BY PITCH')
 	);
 };
 
@@ -3521,12 +3539,62 @@ const renderDiamondGrid = (atBatResult?: string, description?: string, baseRunni
 		? getBaseAdvancement(atBatResult)
 		: { first: false, second: false, third: false, home: false };
 
-	// Get base path visualization if available
-	const basePathViz = baseRunningTrip ? getBasePathVisualization(baseRunningTrip) : null;
-
 	const cornerLabels = atBatResult
 		? getCornerLabels(atBatResult, description)
 		: { first: '', second: '', third: '', home: '' };
+
+	// Get base path visualization if available
+	let basePathViz = baseRunningTrip ? getBasePathVisualization(baseRunningTrip) : null;
+
+	// If no baseRunningTrip but we have corner labels (like HBP, BB, etc.), create a synthetic basePathViz
+	// ONLY create synthetic if there's no real base running data available
+	if (!basePathViz && atBatResult && Object.values(cornerLabels).some((label) => label)) {
+		const result = atBatResult.toUpperCase();
+
+		// Create synthetic movement for simple base-reaching events
+		let syntheticMovement = null;
+
+		if (result.includes('HBP') || result.includes('HIT BY PITCH')) {
+			// Only create synthetic if we don't have real base running data
+			syntheticMovement = {
+				from: 'Home',
+				to: '1B',
+				atBatIndex: 0,
+				event: 'Hit by pitch',
+				description: description || '',
+				isOut: false,
+				timestamp: new Date().toISOString(),
+				playerId: 0,
+				playerName: '',
+				isInitialAtBat: true,
+			};
+		} else if (result.includes('BB') || result.includes('WALK')) {
+			syntheticMovement = {
+				from: 'Home',
+				to: '1B',
+				atBatIndex: 0,
+				event: 'Walk',
+				description: description || '',
+				isOut: false,
+				timestamp: new Date().toISOString(),
+				playerId: 0,
+				playerName: '',
+				isInitialAtBat: true,
+			};
+		}
+
+		if (syntheticMovement) {
+			basePathViz = {
+				path: [syntheticMovement],
+				finalBase: syntheticMovement.to,
+				finalEvent: syntheticMovement.event,
+				isOut: false,
+				isScored: false,
+				initialEvent: syntheticMovement.event,
+				hasPinchRunner: false,
+			};
+		}
+	}
 
 	const useCenterText = atBatResult ? shouldUseCenterText(atBatResult, description) : false;
 
@@ -3554,7 +3622,7 @@ const renderDiamondGrid = (atBatResult?: string, description?: string, baseRunni
 							basePathViz
 								? getBaseSquareColor(basePathViz, '1B')
 								: advancement.first
-								? 'bg-primary-600 dark:bg-primary-500'
+								? 'bg-primary-900 dark:bg-primary-100'
 								: 'bg-primary-200 dark:bg-primary-700'
 						}`}></div>
 
@@ -4341,6 +4409,11 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 	enableLiveUpdates = true,
 	liveUpdateDelay = 0,
 }: TraditionalScorecardProps) {
+	// Console log gamePk on component load
+	useEffect(() => {
+		console.log('TraditionalScorecard loaded with gamePk:', gamePk);
+	}, [gamePk]);
+
 	const [detailedData, setDetailedData] = useState<DetailedGameData | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
@@ -5854,8 +5927,8 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 		if (!isLiveGame || !enableLiveUpdates) return null;
 
 		return (
-			<div className="flex items-center justify-center mb-4 p-2 bg-primary-50 dark:bg-primary-800 rounded-lg border border-primary-200 dark:border-primary-700">
-				<div className="flex items-center gap-2">
+			<div className="flex justify-center items-center p-2 mb-4 rounded-lg border bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+				<div className="flex gap-2 items-center">
 					{isLive ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-red-500" />}
 					<span className="text-sm font-medium text-primary-900 dark:text-primary-100">
 						{isLive ? 'Live Updates Active' : 'Live Updates Disconnected'}
@@ -5864,9 +5937,9 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 						<span className="text-xs text-primary-600 dark:text-primary-400">(+{liveUpdateDelay}s delay)</span>
 					)}
 					{isLiveLoading && (
-						<div className="w-4 h-4 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin"></div>
+						<div className="w-4 h-4 rounded-full border-2 animate-spin border-primary-300 border-t-primary-600"></div>
 					)}
-					{liveError && <span className="text-xs text-red-600 dark:text-red-400 ml-2">Error: {liveError}</span>}
+					{liveError && <span className="ml-2 text-xs text-red-600 dark:text-red-400">Error: {liveError}</span>}
 				</div>
 			</div>
 		);
