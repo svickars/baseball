@@ -6,6 +6,12 @@ import LoadingSpinner from './LoadingSpinner';
 import * as TeamLogos from './team-logos';
 import { baseballApi } from '@/lib/api';
 import { ArrowRight, X, Wifi, WifiOff } from 'lucide-react';
+import {
+	getAllPitchSequences,
+	getPitchSequenceForAtBat,
+	getPitchSequenceDisplay,
+	AtBatPitchSequence,
+} from '@/utils/pitchSequenceUtils';
 
 // Movement color variables for accessibility in both light and dark modes
 const MOVEMENT_COLORS = {
@@ -3614,7 +3620,7 @@ const renderDiamondGrid = (atBatResult?: string, description?: string, baseRunni
 	// Base positions in the diamond (rotated 45 degrees):
 	// Top Left = Second Base, Top Right = First Base, Bottom Left = Third Base, Bottom Right = Home Plate
 	return (
-		<div className="flex absolute inset-0 justify-center items-center">
+		<div className="flex absolute inset-0 z-50 justify-center items-center">
 			{/* COME BACK HERE */}
 			<div className="relative w-6 h-6 rotate-45">
 				{/* Enhanced Diamond grid with base path visualization */}
@@ -3812,6 +3818,7 @@ const BatterRow = ({
 	isLastRow = false,
 	detailedData,
 	inningColumns,
+	pitchSequences,
 }: {
 	batter: BatterData;
 	index: number;
@@ -3820,6 +3827,7 @@ const BatterRow = ({
 	isLastRow?: boolean;
 	detailedData: DetailedGameData | null;
 	inningColumns: number[];
+	pitchSequences: Map<string, AtBatPitchSequence>;
 }) => {
 	// Create dynamic column template based on inning structure
 	const inningColumnTemplate = inningColumns.map((cols) => Array(cols).fill('1fr').join(' ')).join(' ');
@@ -4133,11 +4141,6 @@ const BatterRow = ({
 										detailedData={detailedData}
 									/>
 								)}
-								{/* Debug: Check if atBatResult exists for Bobby Witt Jr. */}
-								{batter.name === 'Bobby Witt Jr.' &&
-									(() => {
-										return null;
-									})()}
 
 								{atBatResult ? (
 									<div className="relative z-10 w-full h-full">
@@ -4163,6 +4166,57 @@ const BatterRow = ({
 											</div>
 										)}
 
+										{/* Ball and Strike indicators */}
+										{(() => {
+											// Get pitch sequence for this at-bat
+											const halfInning = batter.isAway ? 'top' : 'bottom';
+											const pitchSequence = getPitchSequenceForAtBat(
+												pitchSequences,
+												batter.name,
+												inningNumber,
+												halfInning
+											);
+											const pitchDisplay = getPitchSequenceDisplay(pitchSequence);
+
+											return (
+												<div className="flex absolute top-0 right-0 h-full -z-10">
+													{/* Ball indicator */}
+													<div className="w-2 h-[50%] border-l border-l-primary-200 dark:border-l-primary-600 bg-primary-100 dark:bg-primary-800 flex flex-col items-center">
+														{pitchDisplay.balls.map((pitchNum, index) => (
+															<div key={index} className="h-2 text-[6px] tracking-tighter text-center font-mono">
+																{pitchNum}
+															</div>
+														))}
+													</div>
+													{/* Strike indicator column 1 */}
+													<div className="flex flex-col items-center w-2 h-full border-l border-l-primary-200 dark:border-l-primary-600 bg-primary-100 dark:bg-primary-800">
+														{pitchDisplay.strikeEvents.slice(0, 6).map((event, index) => (
+															<div
+																key={index}
+																className={`h-2 flex items-center justify-center w-full tracking-tighter text-center text-[6px] font-mono ${
+																	event.isFoul ? 'border border-primary-600 dark:border-primary-400' : ''
+																}`}>
+																{event.pitchNumber}
+															</div>
+														))}
+														{pitchDisplay.inPlay && <X className="w-2 h-2 text-primary-900 dark:text-primary-100" />}
+													</div>
+													{/* Strike indicator column 2 */}
+													<div className="flex flex-col items-center w-2 h-full border-l border-l-primary-200 dark:border-l-primary-600 bg-primary-100 dark:bg-primary-800">
+														{pitchDisplay.strikeEvents.slice(6).map((event, index) => (
+															<div
+																key={index}
+																className={`h-2 flex items-center justify-center w-full tracking-tighter text-center text-[6px] font-mono ${
+																	event.isFoul ? 'border border-primary-600 dark:border-primary-400' : ''
+																}`}>
+																{event.pitchNumber}
+															</div>
+														))}
+													</div>
+												</div>
+											);
+										})()}
+
 										{/* Out indicators */}
 										{(() => {
 											if (atBatResult?.description) {
@@ -4173,7 +4227,7 @@ const BatterRow = ({
 															{outs.map((outNumber, i) => (
 																<div
 																	key={i}
-																	className="flex justify-center items-center w-3 h-3 rounded-full border pt-[2px] border-red-600 dark:border-red-300">
+																	className="flex justify-center items-center w-3 h-3 rounded-full border pt-[2px] border-red-600 dark:border-red-300 bg-primary-100 dark:bg-primary-700">
 																	<span className="leading-none text-red-600 text-[8px] dark:text-red-300">
 																		{outNumber}
 																	</span>
@@ -4490,6 +4544,9 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 	const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 	const [liveUpdateSummary, setLiveUpdateSummary] = useState<any>(null);
 
+	// Pitch sequence data
+	const [pitchSequences, setPitchSequences] = useState<Map<string, AtBatPitchSequence>>(new Map());
+
 	// Live update state - use data from parent component instead of separate hook
 	const [isLive, setIsLive] = useState(false);
 	const [isLiveLoading, setIsLiveLoading] = useState(false);
@@ -4720,6 +4777,14 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 			// Detailed data updated
 		}
 	}, [detailedData]);
+
+	// Process pitch sequences when game data changes
+	useEffect(() => {
+		if (gameData) {
+			const sequences = getAllPitchSequences(gameData);
+			setPitchSequences(sequences);
+		}
+	}, [gameData]);
 
 	const fetchDetailedData = useCallback(async () => {
 		setLoading(true);
@@ -5199,7 +5264,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 		const displayInnings = Math.max(9, maxInnings); // Always show at least 9 innings
 
 		return (
-			<div className="overflow-x-auto min-w-[1300px]">
+			<div className="overflow-x-auto min-w-[1400px]">
 				{/* TOP Scorecard (Away Team) */}
 				<div className="border-b border-primary-400 dark:border-primary-800">
 					{/* TOP Header Fields */}
@@ -5383,6 +5448,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								isLastRow={index === detailedData.batters.away.length - 1}
 								detailedData={detailedData}
 								inningColumns={inningColumns}
+								pitchSequences={pitchSequences}
 							/>
 						));
 					})()}
@@ -5693,6 +5759,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								isLastRow={index === detailedData.batters.home.length - 1}
 								detailedData={detailedData}
 								inningColumns={inningColumns}
+								pitchSequences={pitchSequences}
 							/>
 						));
 					})()}
