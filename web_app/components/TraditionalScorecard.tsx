@@ -729,7 +729,7 @@ const AtBatTooltip = ({
 	}
 
 	return (
-		<div className="absolute -bottom-2 left-1/2 z-50 px-3 py-2 w-80 text-sm text-white whitespace-normal bg-gray-900 rounded-lg border border-gray-700 shadow-lg opacity-0 transition-opacity duration-200 transform -translate-x-1/2 translate-y-full pointer-events-none dark:bg-gray-100 dark:text-gray-900 dark:border-gray-300 group-hover:opacity-100">
+		<div className="absolute -bottom-2 left-1/2 z-50 px-3 py-2 w-80 text-sm text-white whitespace-normal bg-gray-900 rounded-lg border border-gray-700 shadow-lg opacity-0 transition-opacity duration-200 transform -translate-x-1/2 translate-y-full pointer-events-none dark:bg-gray-900 dark:text-white dark:border-gray-700 group-hover:opacity-100">
 			<div className="mb-1 font-semibold">
 				{actualPlayerName} - {enhancedAtBatResult}
 			</div>
@@ -737,7 +737,7 @@ const AtBatTooltip = ({
 
 			{/* Base running movements */}
 			{baseRunningTrip && baseRunningTrip.basePath.length > 0 && (
-				<div className="pt-2 border-t border-gray-600 dark:border-gray-400">
+				<div className="pt-2 border-t border-gray-600 dark:border-gray-600">
 					{(() => {
 						// Consolidate consecutive movements from the same at-bat
 						const consolidatedMovements: BaseRunningMovement[] = [];
@@ -807,7 +807,7 @@ const AtBatTooltip = ({
 			)}
 
 			{/* Arrow pointing up to the cell - positioned to be half-hidden behind the tooltip */}
-			<div className="absolute -top-1 left-1/2 w-2 h-2 bg-gray-900 border-t border-l border-gray-700 transform rotate-45 -translate-x-1/2 dark:bg-gray-100 dark:border-gray-300"></div>
+			<div className="absolute -top-1 left-1/2 w-2 h-2 bg-gray-900 border-t border-l border-gray-700 transform rotate-45 -translate-x-1/2 dark:bg-gray-900 dark:border-gray-700"></div>
 		</div>
 	);
 };
@@ -3764,17 +3764,17 @@ const BatterRow = ({
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.number || index + 1}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+				<div className="flex justify-center items-center h-6 font-medium border-b bg-primary-100 dark:bg-primary-800 text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.substitutions?.[0]?.player_number || ''}
 				</div>
-				<div className="flex justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+				<div className="flex justify-center items-center h-6 font-medium bg-primary-100 dark:bg-primary-800 text-2xs text-primary-900 dark:text-primary-100">
 					{batter.substitutions?.[1]?.player_number || ''}
 				</div>
 			</div>
 
 			{/* Player Name */}
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-800 h-18">
-				<div className="flex justify-between items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+				<div className="flex justify-between items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-700">
 					<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
 						{batter.name}
 					</span>
@@ -3784,7 +3784,7 @@ const BatterRow = ({
 						</span>
 					)}
 				</div>
-				<div className="flex justify-between items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
+				<div className="flex justify-between items-center px-2 h-6 border-b bg-primary-100 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
 					{batter.substitutions?.[0] && (
 						<>
 							<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
@@ -3809,7 +3809,7 @@ const BatterRow = ({
 						</>
 					)}
 				</div>
-				<div className="flex justify-between items-center px-2 h-6 bg-primary-50 dark:bg-primary-800">
+				<div className="flex justify-between items-center px-2 h-6 bg-primary-100 dark:bg-primary-800">
 					{batter.substitutions?.[1] && (
 						<>
 							<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
@@ -3863,7 +3863,7 @@ const BatterRow = ({
 				</div>
 
 				{/* First substitution position */}
-				<div className="flex relative justify-center items-center h-6 font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+				<div className="flex relative justify-center items-center h-6 font-medium border-b bg-primary-100 dark:bg-primary-800 text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.substitutions?.[0] && (
 						<>
 							{/* Check if this substitution had a position change */}
@@ -3892,7 +3892,7 @@ const BatterRow = ({
 				</div>
 
 				{/* Second substitution position */}
-				<div className="flex relative justify-center items-center h-6 font-medium text-2xs text-primary-900 dark:text-primary-100">
+				<div className="flex relative justify-center items-center h-6 font-medium bg-primary-100 dark:bg-primary-800 text-2xs text-primary-900 dark:text-primary-100">
 					{batter.substitutions?.[1] && (
 						<>
 							{/* Check if this substitution had a position change */}

@@ -34,23 +34,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 									<div className="flex justify-between items-center">
 										<div className="flex gap-4 items-center">
 											<p className="text-sm text-primary-700 dark:text-primary-300">© 2025</p>
-											<p className="text-sm text-primary-700 dark:text-primary-300">
-												Built with ⚾ using{' '}
-												<a
-													href="https://github.com/benjamincrom/baseball?tab=readme-ov-file"
-													target="_blank"
-													rel="noopener noreferrer"
-													className="text-accent-600 dark:text-accent-400 hover:underline">
-													Benjamin Crom&rsquo;s Baseball project
-												</a>{' '}
-												and the MLB API.
-											</p>
+											<p className="text-sm text-primary-700 dark:text-primary-300">Built with ⚾ using the MLB API.</p>
 										</div>
-										<a
+										{/* <a
 											href="/about"
 											className="text-sm text-primary-700 dark:text-primary-300 hover:text-accent-600 dark:hover:text-accent-400 hover:underline">
 											About this Project
-										</a>
+										</a> */}
 									</div>
 								</div>
 							</footer>
