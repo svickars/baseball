@@ -3791,7 +3791,7 @@ const BatterRow = ({
 						{batter.name}
 					</span>
 					{batter.average && batter.onBasePercentage && batter.sluggingPercentage && (
-						<span className="flex-shrink-0 ml-2 font-normal text-[8px] text-primary-600 dark:text-primary-400">
+						<span className="flex-shrink-0 ml-2 font-mono font-normal text-[8px] text-primary-600 dark:text-primary-400">
 							{formatSlashLine(batter.average, batter.onBasePercentage, batter.sluggingPercentage)}
 						</span>
 					)}
@@ -3810,7 +3810,7 @@ const BatterRow = ({
 							{batter.substitutions[0].average &&
 								batter.substitutions[0].onBasePercentage &&
 								batter.substitutions[0].sluggingPercentage && (
-									<span className="flex-shrink-0 ml-2 font-normal text-[8px] text-primary-600 dark:text-primary-400">
+									<span className="flex-shrink-0 ml-2 font-mono font-normal text-[8px] text-primary-600 dark:text-primary-400">
 										{formatSlashLine(
 											batter.substitutions[0].average,
 											batter.substitutions[0].onBasePercentage,
@@ -3835,7 +3835,7 @@ const BatterRow = ({
 							{batter.substitutions[1].average &&
 								batter.substitutions[1].onBasePercentage &&
 								batter.substitutions[1].sluggingPercentage && (
-									<span className="flex-shrink-0 ml-2 font-normal text-[8px] text-primary-600 dark:text-primary-400">
+									<span className="flex-shrink-0 ml-2 font-mono font-normal text-[8px] text-primary-600 dark:text-primary-400">
 										{formatSlashLine(
 											batter.substitutions[1].average,
 											batter.substitutions[1].onBasePercentage,
@@ -4116,7 +4116,9 @@ const BatterRow = ({
 													{/* Ball indicator */}
 													<div className="w-2 h-[50%] border-l border-l-primary-200 dark:border-l-primary-600 bg-primary-100 dark:bg-primary-800 flex flex-col items-center">
 														{pitchDisplay.balls.map((pitchNum, index) => (
-															<div key={index} className="h-2 text-[6px] tracking-tighter text-center font-mono">
+															<div
+																key={index}
+																className="h-2 flex items-center justify-center w-full text-[6px] tracking-tighter text-center font-mono">
 																{pitchNum}
 															</div>
 														))}
@@ -5709,11 +5711,15 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 									gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
 								}}>
 								{/* Combined first three columns */}
-								<div className="grid grid-cols-2 col-span-3 grid-rows-2 h-10 font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
-									<div className="flex justify-center items-center text-xs border-r border-b border-primary-200">R</div>
-									<div className="flex justify-center items-center text-xs border-b border-primary-200">H</div>
-									<div className="flex justify-center items-center text-xs border-r border-primary-200">LOB</div>
-									<div className="flex justify-center items-center text-xs">E</div>
+								<div className="flex col-span-3 justify-end items-center h-10 font-normal border-r text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
+									<div className="grid grid-cols-2 col-span-3 grid-rows-2 w-24 h-full">
+										<div className="flex justify-center items-center border-r border-b text-2xs border-primary-200">
+											R
+										</div>
+										<div className="flex justify-center items-center border-b text-2xs border-primary-200">H</div>
+										<div className="flex justify-center items-center border-r text-2xs border-primary-200">LOB</div>
+										<div className="flex justify-center items-center text-2xs">E</div>
+									</div>
 								</div>
 
 								{/* Inning columns with R/H/LOB/E totals */}
@@ -5745,16 +5751,18 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 													} ${isFirstColumn ? 'grid grid-cols-2 grid-rows-2 ' : ''}`}>
 													{isFirstColumn ? (
 														<>
-															<div className="flex justify-center items-center text-xs border-r border-b border-primary-200">
-																{inningRuns}
+															<div className="flex justify-center items-center border-r border-b text-2xs border-primary-200">
+																{inningRuns === 0 ? '-' : inningRuns}
 															</div>
-															<div className="flex justify-center items-center text-xs border-b border-primary-200">
-																{inningHits}
+															<div className="flex justify-center items-center border-b text-2xs border-primary-200">
+																{inningHits === 0 ? '-' : inningHits}
 															</div>
-															<div className="flex justify-center items-center text-xs border-r border-primary-200">
-																{inningLOB}
+															<div className="flex justify-center items-center border-r text-2xs border-primary-200">
+																{inningLOB === 0 ? '-' : inningLOB}
 															</div>
-															<div className="flex justify-center items-center text-xs">{inningErrors}</div>
+															<div className="flex justify-center items-center text-2xs">
+																{inningErrors === 0 ? '-' : inningErrors}
+															</div>
 														</>
 													) : (
 														''
