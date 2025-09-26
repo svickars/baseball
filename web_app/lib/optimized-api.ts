@@ -255,6 +255,76 @@ class OptimizedApiClient {
 		);
 	}
 
+	// Live update methods
+	async getGameDetailsLive(gameId: string, gamePk: string, lastUpdate?: string): Promise<GameData> {
+		try {
+			const params = new URLSearchParams({
+				live: 'true',
+				gamePk: gamePk,
+			});
+
+			if (lastUpdate) {
+				params.append('lastUpdate', lastUpdate);
+			}
+
+			return await this.queueRequest<GameData>({
+				method: 'GET',
+				url: `/api/game/${gameId}?${params.toString()}`,
+			});
+		} catch (error) {
+			console.error('Error fetching live game details:', error);
+			throw error;
+		}
+	}
+
+	// Start live updates for a game
+	async startLiveUpdates(gameId: string, gamePk: string, onUpdate: (data: GameData) => void): Promise<void> {
+		try {
+			// Initial fetch
+			const initialData = await this.getGameDetailsLive(gameId, gamePk);
+			onUpdate(initialData);
+
+			// Set up polling
+			const pollInterval = setInterval(async () => {
+				try {
+					const lastUpdate = new Date().toISOString();
+					const liveData = await this.getGameDetailsLive(gameId, gamePk, lastUpdate);
+
+					if (liveData) {
+						onUpdate(liveData);
+					}
+				} catch (error) {
+					console.error('Error in live update polling:', error);
+				}
+			}, 3000); // 3 second polling
+
+			// Store interval for cleanup
+			(this as any).liveUpdateIntervals = (this as any).liveUpdateIntervals || new Map();
+			(this as any).liveUpdateIntervals.set(gameId, pollInterval);
+		} catch (error) {
+			console.error('Error starting live updates:', error);
+			throw error;
+		}
+	}
+
+	// Stop live updates for a game
+	stopLiveUpdates(gameId: string): void {
+		const intervals = (this as any).liveUpdateIntervals;
+		if (intervals && intervals.has(gameId)) {
+			clearInterval(intervals.get(gameId));
+			intervals.delete(gameId);
+		}
+	}
+
+	// Stop all live updates
+	stopAllLiveUpdates(): void {
+		const intervals = (this as any).liveUpdateIntervals;
+		if (intervals) {
+			intervals.forEach((interval: NodeJS.Timeout) => clearInterval(interval));
+			intervals.clear();
+		}
+	}
+
 	// Get queue statistics
 	getQueueStats(): {
 		queued: number;

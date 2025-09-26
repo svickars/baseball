@@ -5,7 +5,7 @@ import { GameData } from '@/types';
 import LoadingSpinner from './LoadingSpinner';
 import * as TeamLogos from './team-logos';
 import { baseballApi } from '@/lib/api';
-import { ArrowRight, X } from 'lucide-react';
+import { ArrowRight, X, Wifi, WifiOff } from 'lucide-react';
 
 // Movement color variables for accessibility in both light and dark modes
 const MOVEMENT_COLORS = {
@@ -571,6 +571,10 @@ const renderStandardLabels = (cornerLabels: { first: string; second: string; thi
 interface TraditionalScorecardProps {
 	gameData: GameData;
 	gameId: string;
+	gamePk?: string;
+	isLiveGame?: boolean;
+	enableLiveUpdates?: boolean;
+	liveUpdateDelay?: number; // Delay in seconds for live updates
 }
 
 // Helper function to get team logo component
@@ -4175,6 +4179,10 @@ interface DetailedGameData {
 		inningResults: { [key: string]: any[] };
 		errors: { [key: string]: any[] };
 	};
+	// Game feed substitution data
+	game_feed_substitutions?: any[];
+	// Reference to original game data for compatibility
+	game_data?: any;
 	// Game feed data for base running tracking
 	liveData?: {
 		plays?: {
@@ -4325,10 +4333,221 @@ interface GameEvent {
 	pitcher: string;
 }
 
-const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, gameId }: TraditionalScorecardProps) {
+const TraditionalScorecard = memo(function TraditionalScorecard({
+	gameData,
+	gameId,
+	gamePk,
+	isLiveGame = false,
+	enableLiveUpdates = true,
+	liveUpdateDelay = 0,
+}: TraditionalScorecardProps) {
 	const [detailedData, setDetailedData] = useState<DetailedGameData | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
+	const [liveUpdateSummary, setLiveUpdateSummary] = useState<any>(null);
+
+	// Live update state - use data from parent component instead of separate hook
+	const [isLive, setIsLive] = useState(false);
+	const [isLiveLoading, setIsLiveLoading] = useState(false);
+	const [liveError, setLiveError] = useState<string | null>(null);
+
+	// Update detailed data when gameData changes (from parent live updates)
+	useEffect(() => {
+		if (gameData && gameData.game_data) {
+			// Use incremental updates instead of complete replacement
+			setDetailedData((prevData) => {
+				// If this is the first load or we don't have play-by-play data, do a complete update
+				if (!prevData || !gameData.game_data?.play_by_play) {
+					const transformedData: DetailedGameData = {
+						game_id: gameData.game_id,
+						date: gameData.game_data.game_date_str,
+						away_team: gameData.game_data.away_team,
+						home_team: gameData.game_data.home_team,
+						venue: gameData.game_data.location,
+						status: gameData.game_data.status || 'Unknown',
+						innings: gameData.game_data.inning_list || [],
+						batters: {
+							away: gameData.game_data.player_stats?.away?.batters || [],
+							home: gameData.game_data.player_stats?.home?.batters || [],
+						},
+						pitchers: {
+							away: (gameData.game_data.player_stats?.away?.pitchers || []).map((pitcher: any) => ({
+								...pitcher,
+								position: pitcher.position || 'P',
+							})),
+							home: (gameData.game_data.player_stats?.home?.pitchers || []).map((pitcher: any) => ({
+								...pitcher,
+								position: pitcher.position || 'P',
+							})),
+						},
+						events: [],
+						total_away_runs: gameData.game_data.total_away_runs,
+						total_home_runs: gameData.game_data.total_home_runs,
+						umpires: gameData.game_data.umpires,
+						managers: gameData.game_data.managers,
+						start_time: gameData.game_data.start_time || undefined,
+						end_time: gameData.game_data.end_time || undefined,
+						weather: gameData.game_data.weather || undefined,
+						wind: gameData.game_data.wind || undefined,
+						uniforms: gameData.game_data.uniforms
+							? {
+									away: gameData.game_data.uniforms.away || '',
+									home: gameData.game_data.uniforms.home || '',
+							  }
+							: undefined,
+						liveData: gameData.liveData,
+						play_by_play: gameData.game_data.play_by_play,
+						game_feed_substitutions: gameData.game_data.game_feed_substitutions,
+						game_data: gameData.game_data, // Keep reference to original data for compatibility
+					};
+					return transformedData;
+				}
+
+				// For live updates, only update specific fields that should change
+				// Preserve team information - use actual team data or keep existing
+				const awayTeam = gameData.game_data.away_team || prevData.away_team;
+				const homeTeam = gameData.game_data.home_team || prevData.home_team;
+
+				// CRITICAL: Preserve play_by_play data - never let it be undefined during live updates
+				const preservedPlayByPlay = gameData.game_data.play_by_play || prevData.play_by_play;
+
+				// CRITICAL: Preserve game_feed_substitutions data for live updates
+				// Only use new substitution data if it has content and descriptions
+				const newSubstitutions = gameData.game_data.game_feed_substitutions;
+				const prevSubstitutions = prevData.game_feed_substitutions;
+
+				// Check if new substitutions have actual descriptions (not just empty objects)
+				const newHasDescriptions =
+					newSubstitutions &&
+					newSubstitutions.length > 0 &&
+					newSubstitutions.some((sub: any) => sub.description || sub.substitution_description);
+				const prevHasDescriptions =
+					prevSubstitutions &&
+					prevSubstitutions.length > 0 &&
+					prevSubstitutions.some((sub: any) => sub.description || sub.substitution_description);
+
+				// Always prefer data with descriptions, otherwise keep previous data
+				const preservedSubstitutions = newHasDescriptions
+					? newSubstitutions
+					: prevHasDescriptions
+					? prevSubstitutions
+					: newSubstitutions;
+
+				return {
+					...prevData, // Keep all existing data
+					// Preserve team information
+					away_team: awayTeam,
+					home_team: homeTeam,
+					// Only update live-changing parts
+					status: gameData.game_data.status || prevData.status,
+					total_away_runs: gameData.game_data.total_away_runs ?? prevData.total_away_runs,
+					total_home_runs: gameData.game_data.total_home_runs ?? prevData.total_home_runs,
+					innings: gameData.game_data.inning_list || prevData.innings,
+					liveData: gameData.liveData || prevData.liveData,
+					// Update player stats if available, but preserve substitution data
+					batters: gameData.game_data?.player_stats
+						? {
+								away: gameData.game_data.player_stats.away?.batters
+									? (() => {
+											// Only reprocess if we don't have substitution data to preserve
+											const prevAwayBatters = prevData.batters.away;
+											const hasSubstitutionData =
+												prevAwayBatters &&
+												prevAwayBatters.some(
+													(b: any) => b.substitution_description || (b.substitutions && b.substitutions.length > 0)
+												);
+
+											if (hasSubstitutionData) {
+												// Preserve existing batter data with substitution info, just update stats
+												return prevAwayBatters.map((prevBatter: any) => {
+													const newBatter = gameData.game_data.player_stats?.away?.batters?.find(
+														(b: any) => b.name === prevBatter.name || b.person?.fullName === prevBatter.name
+													);
+													return newBatter ? { ...prevBatter, ...newBatter, isAway: true } : prevBatter;
+												});
+											} else {
+												// No substitution data to preserve, process normally
+												return processBatterData(
+													gameData.game_data.player_stats.away.batters,
+													gameData.game_data.player_stats.away?.pitchers || [],
+													true,
+													gameData.game_data.player_stats.away.batters,
+													gameData.game_data
+												);
+											}
+									  })()
+									: prevData.batters.away,
+								home: gameData.game_data.player_stats.home?.batters
+									? (() => {
+											// Only reprocess if we don't have substitution data to preserve
+											const prevHomeBatters = prevData.batters.home;
+											const hasSubstitutionData =
+												prevHomeBatters &&
+												prevHomeBatters.some(
+													(b: any) => b.substitution_description || (b.substitutions && b.substitutions.length > 0)
+												);
+
+											if (hasSubstitutionData) {
+												// Preserve existing batter data with substitution info, just update stats
+												return prevHomeBatters.map((prevBatter: any) => {
+													const newBatter = gameData.game_data.player_stats?.home?.batters?.find(
+														(b: any) => b.name === prevBatter.name || b.person?.fullName === prevBatter.name
+													);
+													return newBatter ? { ...prevBatter, ...newBatter, isAway: false } : prevBatter;
+												});
+											} else {
+												// No substitution data to preserve, process normally
+												return processBatterData(
+													gameData.game_data.player_stats.home.batters,
+													gameData.game_data.player_stats.home?.pitchers || [],
+													false,
+													gameData.game_data.player_stats.home.batters,
+													gameData.game_data
+												);
+											}
+									  })()
+									: prevData.batters.home,
+						  }
+						: prevData.batters,
+					pitchers: gameData.game_data?.player_stats
+						? {
+								away: (gameData.game_data.player_stats.away?.pitchers || prevData.pitchers.away).map(
+									(pitcher: any) => ({
+										...pitcher,
+										position: pitcher.position || 'P',
+									})
+								),
+								home: (gameData.game_data.player_stats.home?.pitchers || prevData.pitchers.home).map(
+									(pitcher: any) => ({
+										...pitcher,
+										position: pitcher.position || 'P',
+									})
+								),
+						  }
+						: prevData.pitchers,
+					// CRITICAL: Always preserve play_by_play data
+					play_by_play: preservedPlayByPlay,
+					// CRITICAL: Always preserve game_feed_substitutions data
+					game_feed_substitutions: preservedSubstitutions,
+					// Update game_data reference with new substitution data
+					game_data: {
+						...prevData.game_data,
+						play_by_play: preservedPlayByPlay,
+						game_feed_substitutions: preservedSubstitutions,
+					},
+				};
+			});
+		}
+	}, [gameData]);
+
+	// Update live status based on game data
+	useEffect(() => {
+		if (gameData && gameData.game_data) {
+			const gameStatus = gameData.game_data.status;
+			const isGameLive = gameStatus === 'In Progress' || gameStatus === 'Live';
+			setIsLive(isGameLive && isLiveGame && enableLiveUpdates);
+		}
+	}, [gameData, isLiveGame, enableLiveUpdates]);
 
 	// Memoize the team logo components to prevent unnecessary re-renders
 	const awayTeamLogo = useMemo(() => {
@@ -4363,7 +4582,6 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 		try {
 			// Fetch detailed game data from the API route (avoids CORS issues)
 			const response = await baseballApi.getGameDetails(gameId);
-			console.log('API Response:', response);
 
 			// Check if the API call was successful
 			if (!(response as any).success) {
@@ -5631,8 +5849,34 @@ const TraditionalScorecard = memo(function TraditionalScorecard({ gameData, game
 		);
 	}
 
+	// Live update indicator component
+	const LiveUpdateIndicator = () => {
+		if (!isLiveGame || !enableLiveUpdates) return null;
+
+		return (
+			<div className="flex items-center justify-center mb-4 p-2 bg-primary-50 dark:bg-primary-800 rounded-lg border border-primary-200 dark:border-primary-700">
+				<div className="flex items-center gap-2">
+					{isLive ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-red-500" />}
+					<span className="text-sm font-medium text-primary-900 dark:text-primary-100">
+						{isLive ? 'Live Updates Active' : 'Live Updates Disconnected'}
+					</span>
+					{liveUpdateDelay > 0 && (
+						<span className="text-xs text-primary-600 dark:text-primary-400">(+{liveUpdateDelay}s delay)</span>
+					)}
+					{isLiveLoading && (
+						<div className="w-4 h-4 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin"></div>
+					)}
+					{liveError && <span className="text-xs text-red-600 dark:text-red-400 ml-2">Error: {liveError}</span>}
+				</div>
+			</div>
+		);
+	};
+
 	return (
 		<div>
+			{/* Live Update Indicator */}
+			<LiveUpdateIndicator />
+
 			{/* Traditional Scorecard Grid */}
 			{renderScorecardGrid()}
 

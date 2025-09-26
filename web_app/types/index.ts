@@ -222,3 +222,68 @@ export interface LiveDataBuffer {
 	data: GameData;
 	timestamp: number;
 }
+
+// Live update related interfaces
+export interface LiveUpdateState {
+	gameData: GameData | null;
+	isLive: boolean;
+	isLoading: boolean;
+	error: string | null;
+	lastUpdate: string | null;
+	hasChanges: boolean;
+}
+
+export interface LiveUpdateOptions {
+	gameId: string;
+	gamePk?: string;
+	isLiveGame: boolean;
+	pollInterval?: number;
+	onDataUpdate?: (data: GameData) => void;
+	onError?: (error: string) => void;
+}
+
+export interface PlayByPlayChanges {
+	newPlays: any[];
+	updatedPlays: any[];
+	removedPlays: any[];
+}
+
+export interface PlayerStatsChanges {
+	updatedBatters: any[];
+	updatedPitchers: any[];
+	newSubstitutions: any[];
+}
+
+export interface GameStateChanges {
+	scoreChanged: boolean;
+	inningChanged: boolean;
+	statusChanged: boolean;
+	baseRunnersChanged: boolean;
+}
+
+export interface LiveUpdateSummary {
+	hasUpdates: boolean;
+	updateCount: number;
+	updateTypes: string[];
+}
+
+// Enhanced GameData interface for live updates
+export interface LiveGameData extends GameData {
+	isLiveUpdate?: boolean;
+	timestamp?: string;
+	hasChanges?: boolean;
+	liveUpdateSummary?: LiveUpdateSummary;
+}
+
+// Live update API response
+export interface LiveUpdateResponse {
+	game_id: string;
+	game: any;
+	game_data: any;
+	liveData: any;
+	svg_content: string;
+	success: boolean;
+	isLiveUpdate: boolean;
+	timestamp: string;
+	hasChanges: boolean;
+}

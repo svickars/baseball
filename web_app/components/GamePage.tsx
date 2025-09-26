@@ -290,19 +290,38 @@ const getGridColsClass = (totalColumns: number) => {
 
 const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: GamePageProps) {
 	const [detailedData, setDetailedData] = useState<any>(null);
-	const [loading, setLoading] = useState(false);
 	const [activeTab, setActiveTab] = useState<'preview' | 'traditional' | 'stats' | 'events'>('preview');
 	const [selectedInning, setSelectedInning] = useState<number | null>(null);
+
+	// Preserve original team data to prevent it from being overwritten by live updates
+	const [originalTeamData, setOriginalTeamData] = useState<{
+		away_team: { name: string; abbreviation: string } | null;
+		home_team: { name: string; abbreviation: string } | null;
+	}>({ away_team: null, home_team: null });
 
 	// Memoize the transformed data to prevent unnecessary recalculations
 	const transformedData = useMemo(() => {
 		if (!gameData) return null;
 
+		// Preserve team information - use actual team data or fallback to generic names
+		// But avoid using generic fallback names if we have real team data
+		let awayTeam = gameData.game_data.away_team || { name: 'Away Team', abbreviation: 'AWAY' };
+		let homeTeam = gameData.game_data.home_team || { name: 'Home Team', abbreviation: 'HOME' };
+
+		// If we're getting generic team names, use the original team data if available
+		// This happens during live updates where the API returns generic team names
+		if (awayTeam.name === 'Away Team' && originalTeamData.away_team) {
+			awayTeam = originalTeamData.away_team;
+		}
+		if (homeTeam.name === 'Home Team' && originalTeamData.home_team) {
+			homeTeam = originalTeamData.home_team;
+		}
+
 		return {
 			game_id: gameData.game_id,
 			date: gameData.game_data.game_date_str,
-			away_team: gameData.game_data.away_team,
-			home_team: gameData.game_data.home_team,
+			away_team: awayTeam,
+			home_team: homeTeam,
 			venue: gameData.game_data.location,
 			status: gameData.game_data.status || 'Unknown',
 			innings: gameData.game_data.inning_list || [],
@@ -323,21 +342,24 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 			pitchers: { away: [], home: [] },
 			events: [],
 		} as DetailedGameData;
+	}, [gameData, originalTeamData]);
+
+	// Capture original team data when first loaded to preserve it during live updates
+	useEffect(() => {
+		if (gameData && gameData.game_data && gameData.game_data.away_team && gameData.game_data.home_team) {
+			// Only capture if we have real team names (not generic fallbacks)
+			if (gameData.game_data.away_team.name !== 'Away Team' && gameData.game_data.home_team.name !== 'Home Team') {
+				setOriginalTeamData({
+					away_team: gameData.game_data.away_team,
+					home_team: gameData.game_data.home_team,
+				});
+			}
+		}
 	}, [gameData]);
 
+	// Update detailed data when gameData changes (from parent live updates)
 	useEffect(() => {
-		fetchDetailedData();
-	}, [gameId]);
-
-	const fetchDetailedData = useCallback(async () => {
-		setLoading(true);
-		try {
-			// Use the memoized transformed data
-			if (!transformedData) {
-				setLoading(false);
-				return;
-			}
-
+		if (gameData && gameData.game_data && transformedData) {
 			// Process the detailed data with memoized transformations
 			const processedData = {
 				...transformedData,
@@ -395,12 +417,8 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 				events: [],
 			};
 			setDetailedData(processedData);
-		} catch (error) {
-			console.error('Error fetching detailed data:', error);
-		} finally {
-			setLoading(false);
 		}
-	}, [transformedData, gameData.game_data.player_stats]);
+	}, [gameData, transformedData]);
 
 	// Memoize tab change handler
 	const handleTabChange = useCallback((tab: 'preview' | 'traditional' | 'stats' | 'events') => {
@@ -906,13 +924,13 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 					{/* Away Team */}
 					<div className="flex flex-1 gap-3 justify-start items-center">
 						<div className="flex justify-center items-center py-4 pr-6 border-r border-primary-200 dark:border-primary-600">
-							{getTeamLogo(gameData.game_data.away_team.abbreviation)}
+							{getTeamLogo((transformedData?.away_team || gameData.game_data.away_team).abbreviation)}
 						</div>
 						<span className="hidden text-2xl font-semibold tracking-wider uppercase font-display text-primary-900 dark:text-primary-100 sm:block">
-							{gameData.game_data.away_team.name}
+							{(transformedData?.away_team || gameData.game_data.away_team).name}
 						</span>
 						<span className="text-2xl font-semibold tracking-wider uppercase font-display text-primary-900 dark:text-primary-100 sm:hidden">
-							{gameData.game_data.away_team.abbreviation}
+							{(transformedData?.away_team || gameData.game_data.away_team).abbreviation}
 						</span>
 					</div>
 
@@ -924,13 +942,13 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 					{/* Home Team */}
 					<div className="flex flex-1 gap-3 justify-end items-center">
 						<span className="hidden text-2xl font-semibold tracking-wider uppercase font-display text-primary-900 dark:text-primary-100 sm:block">
-							{gameData.game_data.home_team.name}
+							{(transformedData?.home_team || gameData.game_data.home_team).name}
 						</span>
 						<span className="text-2xl font-semibold tracking-wider uppercase font-display text-primary-900 dark:text-primary-100 sm:hidden">
-							{gameData.game_data.home_team.abbreviation}
+							{(transformedData?.home_team || gameData.game_data.home_team).abbreviation}
 						</span>
 						<div className="flex justify-center items-center py-4 pl-6 border-l border-primary-200 dark:border-primary-600">
-							{getTeamLogo(gameData.game_data.home_team.abbreviation)}
+							{getTeamLogo((transformedData?.home_team || gameData.game_data.home_team).abbreviation)}
 						</div>
 					</div>
 				</div>
@@ -1218,22 +1236,28 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 
 			{/* Content */}
 			<div className="overflow-x-scroll">
-				{loading && (
-					<div className="flex justify-center items-center py-12">
-						<LoadingSpinner message="Loading game data..." />
-					</div>
+				{activeTab === 'preview' && (
+					<GamePreview gameData={gameData} originalGame={originalGame} detailedData={detailedData} />
 				)}
-
-				{!loading && (
-					<>
-						{activeTab === 'preview' && (
-							<GamePreview gameData={gameData} originalGame={originalGame} detailedData={detailedData} />
-						)}
-						{activeTab === 'traditional' && <TraditionalScorecard gameData={gameData} gameId={gameId} />}
-						{activeTab === 'stats' && renderStats()}
-						{activeTab === 'events' && renderEvents()}
-					</>
+				{activeTab === 'traditional' && (
+					<TraditionalScorecard
+						gameData={{
+							...gameData,
+							game_data: {
+								...gameData.game_data,
+								away_team: transformedData?.away_team || gameData.game_data.away_team,
+								home_team: transformedData?.home_team || gameData.game_data.home_team,
+							},
+						}}
+						gameId={gameId}
+						gamePk={originalGame?.game_pk?.toString()}
+						isLiveGame={originalGame?.is_live || false}
+						enableLiveUpdates={true}
+						liveUpdateDelay={0} // No delay by default, can be configured later
+					/>
 				)}
+				{activeTab === 'stats' && renderStats()}
+				{activeTab === 'events' && renderEvents()}
 			</div>
 		</div>
 	);

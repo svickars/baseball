@@ -3147,3 +3147,265 @@ export function destroyCaches(): void {
 	uniformsCache.destroy();
 	pendingRequests.clear();
 }
+
+// Live update functions for real-time game data
+export async function getGameDetailsLive(
+	gamePk: string,
+	lastUpdate?: string | null
+): Promise<GameData & { hasChanges: boolean }> {
+	try {
+		// Create cache key for live updates
+		const liveCacheKey = createCacheKey('liveGame', gamePk, lastUpdate || 'initial');
+
+		// Use cached request for live updates
+		return await makeCachedRequest(
+			gameFeedCache,
+			liveCacheKey,
+			async () => {
+				// Build URL with diffPatch parameter for incremental updates
+				const baseUrl = `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`;
+				const url = lastUpdate ? `${baseUrl}?diffPatch=true` : baseUrl;
+
+				const response = await fetch(url, {
+					headers: {
+						'User-Agent': 'Mozilla/5.0 (compatible; BaseballApp/1.0)',
+					},
+				});
+
+				if (!response.ok) {
+					throw new Error(`Live game feed request failed with status: ${response.status}`);
+				}
+
+				const gameFeedData = await response.json();
+
+				// Check if there are actual changes in the data
+				const hasChanges = detectGameChanges(gameFeedData, lastUpdate);
+
+				// Process the live data using existing functions
+				const processedData = await processLiveGameData(gameFeedData, gamePk);
+
+				return {
+					...processedData,
+					hasChanges,
+				};
+			},
+			5 * 1000 // 5 seconds TTL for live game feeds
+		);
+	} catch (error) {
+		console.error(`Error fetching live game data for ${gamePk}:`, error);
+		throw error;
+	}
+}
+
+// Detect changes in game data
+function detectGameChanges(gameFeedData: any, lastUpdate?: string | null): boolean {
+	if (!lastUpdate) return true; // Initial load always has changes
+
+	try {
+		const currentTimestamp = gameFeedData.metaData?.timeStamp || gameFeedData.gameData?.game?.gameDate;
+		if (!currentTimestamp) return true;
+
+		// Simple timestamp comparison - in a real implementation, you'd want more sophisticated diffing
+		const lastUpdateTime = new Date(lastUpdate).getTime();
+		const currentTime = new Date(currentTimestamp).getTime();
+
+		return currentTime > lastUpdateTime;
+	} catch (error) {
+		// If we can't determine changes, assume there are changes to be safe
+		return true;
+	}
+}
+
+// Process live game data using existing transformation logic
+async function processLiveGameData(gameFeedData: any, gamePk: string): Promise<GameData> {
+	// Extract basic game information
+	const gameData = gameFeedData.gameData || {};
+	const liveData = gameFeedData.liveData || {};
+	const teams = gameData.teams || {};
+	const awayTeam = teams.away || {};
+	const homeTeam = teams.home || {};
+	const status = gameData.status || {};
+
+	const awayTeamName = awayTeam.team?.name || 'Away Team';
+	const homeTeamName = homeTeam.team?.name || 'Home Team';
+	const awayCodeFromName = TEAM_ABBREVIATIONS[awayTeamName] || 'AWY';
+	const homeCodeFromName = TEAM_ABBREVIATIONS[homeTeamName] || 'HOM';
+
+	// Get current scores
+	const awayScore = awayTeam.score || 0;
+	const homeScore = homeTeam.score || 0;
+
+	// Process inning data from live feed
+	let inningList: any[] = [];
+	if (liveData.linescore && liveData.linescore.innings) {
+		inningList = liveData.linescore.innings.map((inning: any) => ({
+			inning: inning.num,
+			away_runs: inning.away?.runs || 0,
+			home_runs: inning.home?.runs || 0,
+		}));
+	}
+
+	// Process player statistics from live data
+	let playerStats: { away: { batters: any[]; pitchers: any[] }; home: { batters: any[]; pitchers: any[] } } = {
+		away: { batters: [], pitchers: [] },
+		home: { batters: [], pitchers: [] },
+	};
+
+	// Extract substitution events from live data
+	const substitutionEvents = extractSubstitutionEventsFromGameFeed(gameFeedData);
+
+	// Process substitution events into our format
+	const processedSubstitutions = processGameFeedSubstitutions(substitutionEvents, gameFeedData);
+
+	// Create substitution timing map for live games
+	const liveSubstitutionMap = deriveSubstitutionTimingFromBoxscore(
+		liveData.boxscore || {},
+		liveData.plays?.allPlays || []
+	);
+
+	if (liveData.boxscore && liveData.boxscore.teams) {
+		// Process away team stats
+		if (liveData.boxscore.teams.away && liveData.boxscore.teams.away.batters) {
+			const awayBatters = extractBatterStats(
+				liveData.boxscore.teams.away.batters,
+				liveData.boxscore.teams.away.players,
+				liveSubstitutionMap // Use extracted substitution data for live updates
+			);
+			const awayPitchers = extractAllPitchersFromGame(liveData.boxscore.teams.away, gameData.players || {}, true);
+			playerStats.away = { batters: awayBatters, pitchers: awayPitchers };
+		}
+
+		// Process home team stats
+		if (liveData.boxscore.teams.home && liveData.boxscore.teams.home.batters) {
+			const homeBatters = extractBatterStats(
+				liveData.boxscore.teams.home.batters,
+				liveData.boxscore.teams.home.players,
+				liveSubstitutionMap // Use extracted substitution data for live updates
+			);
+			const homePitchers = extractAllPitchersFromGame(liveData.boxscore.teams.home, gameData.players || {}, false);
+			playerStats.home = { batters: homeBatters, pitchers: homePitchers };
+		}
+	}
+
+	// Apply the processed substitution data to the player data for live games
+	if (processedSubstitutions && processedSubstitutions.length > 0) {
+		processedSubstitutions.forEach((sub: any) => {
+			const playerName = sub.substitutingPlayer;
+
+			// Find and update the player in both teams
+			[
+				playerStats.away.batters,
+				playerStats.home.batters,
+				playerStats.away.pitchers,
+				playerStats.home.pitchers,
+			].forEach((players: any[]) => {
+				if (players && Array.isArray(players)) {
+					players.forEach((player: any) => {
+						if (player.person?.fullName === playerName) {
+							player.substitution_inning = sub.inning;
+							player.substitution_half_inning = sub.halfInning;
+							player.substitution_description = sub.description;
+							player.substitution_order = sub.chronologicalOrder;
+							player.substitution_position = sub.position;
+						}
+					});
+				}
+			});
+		});
+	}
+
+	// Process play-by-play data for live updates
+	const allPlays = liveData.plays?.allPlays || [];
+	const allTeamPlayers = {
+		...(liveData.boxscore?.teams?.away?.players || {}),
+		...(liveData.boxscore?.teams?.home?.players || {}),
+	};
+	const playByPlayData = processPlayByPlayData(allPlays, allTeamPlayers);
+
+	// Extract supplementary game information
+	const umpires = extractUmpires(gameFeedData);
+	const weather = extractWeather(gameFeedData);
+	const startTime = extractStartTime(gameFeedData);
+	const wind = extractWind(gameFeedData);
+
+	// Get team IDs for manager extraction
+	const awayTeamId = gameData.teams?.away?.id;
+	const homeTeamId = gameData.teams?.home?.id;
+
+	let managers = { away: null as string | null, home: null as string | null };
+	if (awayTeamId && homeTeamId) {
+		managers = await extractManagers(awayTeamId, homeTeamId);
+	} else {
+		managers = generateFallbackManagers();
+	}
+
+	const uniforms = await extractUniforms(awayTeamId, homeTeamId);
+
+	// Generate game ID from gamePk (simplified for live updates)
+	const gameId = `live-${gamePk}`;
+
+	// Return processed live game data
+	return {
+		game_id: gameId,
+		game_data: {
+			away_team: {
+				name: awayTeamName,
+				abbreviation: awayCodeFromName,
+			},
+			home_team: {
+				name: homeTeamName,
+				abbreviation: homeCodeFromName,
+			},
+			game_date_str: gameData.game?.gameDate || new Date().toISOString().split('T')[0],
+			location: gameData.venue?.name || 'Stadium',
+			inning_list: inningList,
+			is_postponed: status.detailedState === 'Postponed',
+			is_suspended: status.detailedState === 'Suspended',
+			away_score: awayScore,
+			home_score: homeScore,
+			total_away_runs: awayScore,
+			total_home_runs: homeScore,
+			status: status.detailedState || 'Unknown',
+			umpires: umpires,
+			managers: managers,
+			start_time: startTime,
+			end_time: null,
+			weather: weather,
+			wind: wind,
+			uniforms: uniforms,
+			player_stats: playerStats,
+			play_by_play: playByPlayData,
+			game_feed_substitutions: processedSubstitutions,
+		},
+		liveData: liveData,
+		svg_content: generateDetailedSVGFromSchedule(
+			{ teams: { away: awayTeam, home: homeTeam }, venue: gameData.venue },
+			awayCodeFromName,
+			homeCodeFromName,
+			inningList
+		),
+		success: true,
+	};
+}
+
+// Merge incremental game data with existing data
+export function mergeIncrementalGameData(existingData: GameData, newData: GameData): GameData {
+	// For now, return the new data as the merge logic would be complex
+	// In a production implementation, you'd want to intelligently merge:
+	// - New plays with existing play-by-play
+	// - Updated player statistics
+	// - New base running movements
+	// - Updated inning scores
+	return newData;
+}
+
+// Update live game state with new data
+export function updateLiveGameState(currentState: any, newData: GameData): any {
+	// Update the state with new live data
+	// This would include merging play-by-play, updating scores, etc.
+	return {
+		...currentState,
+		gameData: newData,
+		lastUpdate: new Date().toISOString(),
+	};
+}

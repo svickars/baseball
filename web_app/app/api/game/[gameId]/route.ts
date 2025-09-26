@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGameDetails } from '@/lib/baseball-service';
+import { getGameDetails, getGameDetailsLive } from '@/lib/baseball-service';
 
 export async function GET(request: NextRequest, { params }: { params: { gameId: string } }) {
 	try {
 		const { gameId } = params;
+		const { searchParams } = new URL(request.url);
 
 		// Parse game_id (format: YYYY-MM-DD-AWAY-HOME-GAME)
 		const parts = gameId.split('-');
@@ -11,6 +12,28 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 			return NextResponse.json({ error: 'Invalid game ID format', success: false }, { status: 400 });
 		}
 
+		// Check for live update parameters
+		const isLiveUpdate = searchParams.get('live') === 'true';
+		const lastUpdate = searchParams.get('lastUpdate');
+		const gamePk = searchParams.get('gamePk');
+
+		// Use live update function for live games with diffPatch
+		if (isLiveUpdate && gamePk) {
+			const liveData = await getGameDetailsLive(gamePk, lastUpdate);
+			return NextResponse.json({
+				game_id: gameId,
+				game: liveData.game_data,
+				game_data: liveData.game_data,
+				liveData: liveData.liveData,
+				svg_content: liveData.svg_content,
+				success: true,
+				isLiveUpdate: true,
+				timestamp: new Date().toISOString(),
+				hasChanges: liveData.hasChanges || false,
+			});
+		}
+
+		// Use regular game details for non-live or initial requests
 		const gameData = await getGameDetails(gameId);
 
 		return NextResponse.json({
@@ -20,6 +43,8 @@ export async function GET(request: NextRequest, { params }: { params: { gameId: 
 			liveData: gameData.liveData, // Include liveData for basepath tracking
 			svg_content: gameData.svg_content,
 			success: true,
+			isLiveUpdate: false,
+			timestamp: new Date().toISOString(),
 		});
 	} catch (error) {
 		console.error('Error in get_game_details:', error);

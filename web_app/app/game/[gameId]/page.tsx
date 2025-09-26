@@ -55,7 +55,6 @@ export default function GameDetailPage() {
 
 			if (originalGame) {
 				setOriginalGame(originalGame);
-				console.log('🎮 Game loaded - gamePk:', originalGame.game_pk);
 			}
 
 			setGameData(gameDetails);
@@ -74,12 +73,16 @@ export default function GameDetailPage() {
 
 		refreshIntervalRef.current = setInterval(async () => {
 			try {
-				console.log(`🔄 Live update for game ${gameId}`);
-				// Fetch updated game data
-				const gameDetailsResponse = await fetch(`/api/game/${gameId}`);
+				// Fetch updated game data with live update parameters
+				const liveParams = new URLSearchParams({
+					live: 'true',
+					gamePk: originalGame?.game_pk?.toString() || '',
+					t: Date.now().toString(), // Cache busting
+				});
+
+				const gameDetailsResponse = await fetch(`/api/game/${gameId}?${liveParams.toString()}`);
 				if (gameDetailsResponse.ok) {
 					const updatedGameData: GameData = await gameDetailsResponse.json();
-					console.log(`✅ Updated game data for ${gameId}:`, updatedGameData.game_data.status);
 					setGameData(updatedGameData);
 				}
 
@@ -119,7 +122,7 @@ export default function GameDetailPage() {
 				console.error('Error updating live game data:', error);
 			}
 		}, 3000); // Update every 3 seconds for live games
-	}, [gameId]);
+	}, [gameId, originalGame]);
 
 	// Stop live updates
 	const stopLiveUpdates = useCallback(() => {
@@ -142,19 +145,10 @@ export default function GameDetailPage() {
 			const gameStatus = getGameStatusFromMLB(originalGame.mlbStatus);
 			const gameIsLive = gameStatus.status === 'live';
 
-			console.log(`🎮 Game ${gameId} status check:`, {
-				mlbStatus: originalGame.mlbStatus,
-				gameStatus,
-				gameIsLive,
-				currentIsLive: isLive,
-			});
-
 			if (gameIsLive && !isLive) {
-				console.log(`🚀 Starting live updates for game ${gameId}`);
 				setIsLive(true);
 				startLiveUpdates();
 			} else if (!gameIsLive && isLive) {
-				console.log(`⏹️ Stopping live updates for game ${gameId}`);
 				stopLiveUpdates();
 			}
 		}
