@@ -68,8 +68,8 @@ const getTeamLogo = (teamCode: string) => {
 	const LogoComponent = (TeamLogos as any)[teamCode];
 	if (!LogoComponent) return null;
 
-	// Use responsive size - 32px on mobile, 64px on desktop
-	return <LogoComponent size={32} className="w-8 h-8 sm:w-16 sm:h-16" />;
+	const size = typeof window !== 'undefined' && window.innerWidth <= 640 ? 32 : 64;
+	return <LogoComponent size={size} />;
 };
 
 // Helper function to enhance stadium location with city
@@ -926,7 +926,7 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 				<div className="flex justify-between items-center px-6 border-b border-primary-200 dark:border-primary-600">
 					{/* Away Team */}
 					<div className="flex flex-1 gap-3 justify-start items-center">
-						<div className="flex justify-center items-center py-4 pr-6 border-r border-primary-200 dark:border-primary-600 w-[56px] md:w-[89px]">
+						<div className="flex justify-center items-center py-4 pr-6 border-r border-primary-200 dark:border-primary-600 w-[56px] sm:w-[89px]">
 							{getTeamLogo((transformedData?.away_team || gameData.game_data.away_team).abbreviation)}
 						</div>
 						<span className="hidden text-2xl font-semibold tracking-wider uppercase font-display text-primary-900 dark:text-primary-100 sm:block">
@@ -944,13 +944,13 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 
 					{/* Home Team */}
 					<div className="flex flex-1 gap-3 justify-end items-center">
-						<span className="hidden text-2xl font-semibold tracking-wider uppercase font-display text-primary-900 dark:text-primary-100 sm:block">
+						<span className="hidden text-2xl font-semibold tracking-wider text-right uppercase font-display text-primary-900 dark:text-primary-100 sm:block">
 							{(transformedData?.home_team || gameData.game_data.home_team).name}
 						</span>
-						<span className="text-2xl font-semibold tracking-wider uppercase font-display text-primary-900 dark:text-primary-100 sm:hidden">
+						<span className="text-2xl font-semibold tracking-wider text-right uppercase font-display text-primary-900 dark:text-primary-100 sm:hidden">
 							{(transformedData?.home_team || gameData.game_data.home_team).abbreviation}
 						</span>
-						<div className="flex justify-center items-center py-4 pl-6 border-l border-primary-200 dark:border-primary-600 w-[56px] md:w-[89px]">
+						<div className="flex justify-center items-center py-4 pl-6 border-l border-primary-200 dark:border-primary-600 w-[56px] sm:w-[89px]">
 							{getTeamLogo((transformedData?.home_team || gameData.game_data.home_team).abbreviation)}
 						</div>
 					</div>
@@ -959,14 +959,14 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 				{/* Game Info */}
 				<div>
 					<div className="flex flex-col flex-wrap items-start w-full text-xs border-b sm:text-sm md:flex-row text-primary-600 dark:text-primary-400 border-primary-400 dark:border-primary-700">
-						<div className="flex">
+						<div className="flex w-full sm:w-auto">
 							{/* Time */}
-							<div className="flex items-center justify-center px-3 py-3 border-r border-primary-200 dark:border-primary-600 w-[80px] md:w-[113px]">
+							<div className="flex items-center justify-center px-2 py-2 sm:px-3 sm:py-3 border-r border-primary-200 dark:border-primary-600 w-[93px] sm:w-[113px]">
 								<span className="font-medium">{originalGame?.start_time || 'TBD'}</span>
 							</div>
 
 							{/* Date */}
-							<div className="flex items-center px-4 py-3 border-r border-primary-200 dark:border-primary-600">
+							<div className="flex items-center px-2 py-2 w-full sm:border-r sm:px-3 sm:py-3 border-primary-200 dark:border-primary-600 sm:w-auto">
 								<span className="font-medium">
 									{detailedData?.date ? formatDate(detailedData.date) : formatDate(gameData.game_data.game_date_str)}
 								</span>
@@ -974,7 +974,7 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 						</div>
 						<div className="flex flex-1 w-full border-t border-t-primary-200 md:border-t-0 dark:border-primary-700">
 							{/* Stadium */}
-							<div className="flex flex-1 items-center px-4 py-3 border-r border-primary-200 dark:border-primary-600">
+							<div className="flex flex-1 items-center px-2 py-2 truncate border-r sm:px-4 sm:py-3 border-primary-200 dark:border-primary-600">
 								<span className="font-medium">
 									{originalGame?.location
 										? formatStadiumLocation(originalGame.location)
@@ -985,7 +985,7 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 							</div>
 
 							{/* Game Status */}
-							<div className="h-full w-[112px]">
+							<div className="h-8 sm:h-full w-[96px] sm:w-[112px]">
 								{(() => {
 									// Use MLB API status data for more reliable status determination
 									// Use MLB API status as the primary and only source of truth
@@ -1034,7 +1034,7 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 
 									return statusDisplay ? (
 										<div
-											className={`flex justify-center items-center px-4 py-0 w-full text-base status-indicator h-[44px] ${statusClassModifier}`}>
+											className={`flex justify-center items-center px-2 py-0 w-full h-full text-base sm:px-4 sm:py-0 status-indicator sm:h-[44px] ${statusClassModifier}`}>
 											{statusDisplay}
 										</div>
 									) : null;
