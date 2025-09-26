@@ -66,7 +66,10 @@ interface PitcherData {
 // Helper function to get team logo component
 const getTeamLogo = (teamCode: string) => {
 	const LogoComponent = (TeamLogos as any)[teamCode];
-	return LogoComponent ? <LogoComponent size={64} /> : null;
+	if (!LogoComponent) return null;
+
+	// Use responsive size - 32px on mobile, 64px on desktop
+	return <LogoComponent size={32} className="w-8 h-8 sm:w-16 sm:h-16" />;
 };
 
 // Helper function to enhance stadium location with city
@@ -923,7 +926,7 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 				<div className="flex justify-between items-center px-6 border-b border-primary-200 dark:border-primary-600">
 					{/* Away Team */}
 					<div className="flex flex-1 gap-3 justify-start items-center">
-						<div className="flex justify-center items-center py-4 pr-6 border-r border-primary-200 dark:border-primary-600">
+						<div className="flex justify-center items-center py-4 pr-6 border-r border-primary-200 dark:border-primary-600 w-[56px] md:w-[89px]">
 							{getTeamLogo((transformedData?.away_team || gameData.game_data.away_team).abbreviation)}
 						</div>
 						<span className="hidden text-2xl font-semibold tracking-wider uppercase font-display text-primary-900 dark:text-primary-100 sm:block">
@@ -947,7 +950,7 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 						<span className="text-2xl font-semibold tracking-wider uppercase font-display text-primary-900 dark:text-primary-100 sm:hidden">
 							{(transformedData?.home_team || gameData.game_data.home_team).abbreviation}
 						</span>
-						<div className="flex justify-center items-center py-4 pl-6 border-l border-primary-200 dark:border-primary-600">
+						<div className="flex justify-center items-center py-4 pl-6 border-l border-primary-200 dark:border-primary-600 w-[56px] md:w-[89px]">
 							{getTeamLogo((transformedData?.home_team || gameData.game_data.home_team).abbreviation)}
 						</div>
 					</div>
@@ -955,10 +958,10 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 
 				{/* Game Info */}
 				<div>
-					<div className="flex flex-col flex-wrap items-start w-full text-sm border-b md:flex-row text-primary-600 dark:text-primary-400 border-primary-400 dark:border-primary-700">
+					<div className="flex flex-col flex-wrap items-start w-full text-xs border-b sm:text-sm md:flex-row text-primary-600 dark:text-primary-400 border-primary-400 dark:border-primary-700">
 						<div className="flex">
 							{/* Time */}
-							<div className="flex items-center justify-center px-3 py-3 border-r border-primary-200 dark:border-primary-600 w-[113px]">
+							<div className="flex items-center justify-center px-3 py-3 border-r border-primary-200 dark:border-primary-600 w-[80px] md:w-[113px]">
 								<span className="font-medium">{originalGame?.start_time || 'TBD'}</span>
 							</div>
 
