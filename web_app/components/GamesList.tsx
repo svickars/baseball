@@ -210,13 +210,20 @@ const getInningScore = (inning: number, game: GameWithDetails, isAway: boolean) 
 	// Use the innings data directly from the game object
 	const innings = game.innings || [];
 
+	// Get game status using MLB API status system
+	const gameStatus = game.mlbStatus ? getGameStatusFromMLB(game.mlbStatus) : null;
+	const isUpcoming = gameStatus?.status === 'upcoming' || game.status === 'Scheduled' || game.status === 'Pre-Game';
+	const isLive =
+		gameStatus?.status === 'live' || game.status === 'In Progress' || game.status === 'Live' || game.is_live;
+	const isFinal = gameStatus?.status === 'final' || game.status === 'Final';
+
 	// Handle upcoming games - show nothing for any inning
-	if (game.status === 'Scheduled' || game.status === 'Pre-Game') {
+	if (isUpcoming) {
 		return '';
 	}
 
 	// Handle live games - only show data for completed half-innings
-	if (game.status === 'In Progress' || game.status === 'Live' || game.is_live) {
+	if (isLive) {
 		if (innings && innings.length > 0) {
 			const inningData = innings.find((i) => i.inning === inning);
 
@@ -262,7 +269,7 @@ const getInningScore = (inning: number, game: GameWithDetails, isAway: boolean) 
 	}
 
 	// Handle final games
-	if (game.status === 'Final') {
+	if (isFinal) {
 		if (innings && innings.length > 0) {
 			const inningData = innings.find((i) => i.inning === inning);
 
@@ -302,7 +309,11 @@ const getInningScore = (inning: number, game: GameWithDetails, isAway: boolean) 
 
 // Helper function to get current inning class for live games
 const getInningClass = (inning: number, game: Game) => {
-	if (game.status === 'Live' || game.is_live) {
+	// Get game status using MLB API status system
+	const gameStatus = game.mlbStatus ? getGameStatusFromMLB(game.mlbStatus) : null;
+	const isLive = gameStatus?.status === 'live' || game.status === 'Live' || game.is_live;
+
+	if (isLive) {
 		const currentInning = parseInt(game.inning || '1');
 		if (inning === currentInning) {
 			return 'bg-primary-300 dark:bg-primary-700 animate-pulse-slow';
@@ -315,8 +326,12 @@ const getInningClass = (inning: number, game: Game) => {
 const getInningScoreWithStyle = (inning: number, game: GameWithDetails, isAway: boolean) => {
 	const score = getInningScore(inning, game, isAway);
 
+	// Get game status using MLB API status system
+	const gameStatus = game.mlbStatus ? getGameStatusFromMLB(game.mlbStatus) : null;
+	const isLive = gameStatus?.status === 'live' || game.status === 'Live' || game.is_live;
+
 	// For live games, don't apply special styling to current inning
-	if (game.status === 'Live' || game.is_live) {
+	if (isLive) {
 		const currentInning = parseInt(game.inning || '1');
 		if (inning === currentInning) {
 			return { score, className: '' };

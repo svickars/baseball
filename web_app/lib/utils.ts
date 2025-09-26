@@ -127,23 +127,51 @@ export function getGameStatusFromMLB(mlbStatus: { detailedState?: string; codedG
 			}
 		case 'U': // Suspended
 			return { status: 'suspended', displayText: 'SUSPENDED' };
+		case 'C': // Cancelled
+			return { status: 'postponed', displayText: 'CANCELLED' };
+		case 'O': // Other
+			return { status: 'unknown', displayText: 'OTHER' };
+		case 'W': // Warmup
+			return { status: 'upcoming', displayText: 'WARMUP' };
+		case 'G': // Game Over
+			return { status: 'final', displayText: 'FINAL' };
 		default:
 			// Fallback to detailedState if codedGameState is not available
-			if (detailedState.includes('in progress') || detailedState.includes('live')) {
+			if (
+				detailedState.includes('in progress') ||
+				detailedState.includes('live') ||
+				detailedState.includes('in_progress')
+			) {
 				return { status: 'live', displayText: 'LIVE' };
 			}
-			if (detailedState.includes('final') || detailedState.includes('completed')) {
+			if (
+				detailedState.includes('final') ||
+				detailedState.includes('completed') ||
+				detailedState.includes('game over') ||
+				detailedState.includes('ended')
+			) {
 				return { status: 'final', displayText: 'FINAL' };
 			}
-			if (detailedState.includes('scheduled') || detailedState.includes('preview')) {
+			if (
+				detailedState.includes('scheduled') ||
+				detailedState.includes('preview') ||
+				detailedState.includes('pre-game') ||
+				detailedState.includes('pre game')
+			) {
 				return { status: 'upcoming', displayText: 'UPCOMING' };
 			}
-			if (detailedState.includes('postponed')) {
+			if (
+				detailedState.includes('postponed') ||
+				detailedState.includes('cancelled') ||
+				detailedState.includes('canceled')
+			) {
 				return { status: 'postponed', displayText: 'POSTPONED' };
 			}
 			if (detailedState.includes('suspended')) {
 				return { status: 'suspended', displayText: 'SUSPENDED' };
 			}
+			// If we still don't have a match, log the unknown status for debugging
+			console.warn('Unknown game status:', { codedState, detailedState });
 			return { status: 'unknown', displayText: 'UNKNOWN' };
 	}
 }
