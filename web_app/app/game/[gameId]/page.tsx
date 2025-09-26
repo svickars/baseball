@@ -21,6 +21,18 @@ export default function GameDetailPage() {
 	const [isLive, setIsLive] = useState(false);
 	const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+	// User-controlled live update settings
+	const [liveUpdateSettings, setLiveUpdateSettings] = useState({
+		enableLiveUpdates: true,
+		liveUpdateDelay: 0,
+	});
+
+	// Buffer for delayed updates
+	const [delayedUpdateBuffer, setDelayedUpdateBuffer] = useState<{
+		data: GameData;
+		timestamp: number;
+	} | null>(null);
+
 	const fetchGameData = useCallback(async () => {
 		try {
 			setLoading(true);
@@ -71,6 +83,11 @@ export default function GameDetailPage() {
 			clearInterval(refreshIntervalRef.current);
 		}
 
+		// Only start if live updates are enabled
+		if (!liveUpdateSettings.enableLiveUpdates) {
+			return;
+		}
+
 		refreshIntervalRef.current = setInterval(async () => {
 			try {
 				// Fetch updated game data with live update parameters
@@ -83,7 +100,18 @@ export default function GameDetailPage() {
 				const gameDetailsResponse = await fetch(`/api/game/${gameId}?${liveParams.toString()}`);
 				if (gameDetailsResponse.ok) {
 					const updatedGameData: GameData = await gameDetailsResponse.json();
-					setGameData(updatedGameData);
+
+					// Apply delay if set
+					if (liveUpdateSettings.liveUpdateDelay > 0) {
+						// Store in buffer for delayed display
+						setDelayedUpdateBuffer({
+							data: updatedGameData,
+							timestamp: Date.now(),
+						});
+					} else {
+						// No delay, update immediately
+						setGameData(updatedGameData);
+					}
 				}
 
 				// Also fetch updated games list to get the latest originalGame data
@@ -122,7 +150,7 @@ export default function GameDetailPage() {
 				console.error('Error updating live game data:', error);
 			}
 		}, 3000); // Update every 3 seconds for live games
-	}, [gameId, originalGame]);
+	}, [gameId, originalGame, liveUpdateSettings]);
 
 	// Stop live updates
 	const stopLiveUpdates = useCallback(() => {
@@ -132,6 +160,47 @@ export default function GameDetailPage() {
 		}
 		setIsLive(false);
 	}, []);
+
+	// Handle delayed updates
+	useEffect(() => {
+		if (!delayedUpdateBuffer || liveUpdateSettings.liveUpdateDelay === 0) {
+			return;
+		}
+
+		const delayMs = liveUpdateSettings.liveUpdateDelay * 1000;
+		const timeSinceUpdate = Date.now() - delayedUpdateBuffer.timestamp;
+
+		if (timeSinceUpdate >= delayMs) {
+			// Delay has passed, apply the update
+			setGameData(delayedUpdateBuffer.data);
+			setDelayedUpdateBuffer(null);
+		} else {
+			// Still waiting, set a timeout for the remaining time
+			const remainingTime = delayMs - timeSinceUpdate;
+			const timeoutId = setTimeout(() => {
+				setGameData(delayedUpdateBuffer.data);
+				setDelayedUpdateBuffer(null);
+			}, remainingTime);
+
+			return () => clearTimeout(timeoutId);
+		}
+	}, [delayedUpdateBuffer, liveUpdateSettings.liveUpdateDelay]);
+
+	// Handle live update settings changes
+	const handleLiveUpdateSettingsChange = useCallback(
+		(settings: { enableLiveUpdates: boolean; liveUpdateDelay: number }) => {
+			setLiveUpdateSettings(settings);
+
+			// If live updates are disabled, stop them
+			if (!settings.enableLiveUpdates) {
+				stopLiveUpdates();
+			} else if (isLive && !refreshIntervalRef.current) {
+				// If live updates are enabled and game is live, restart them
+				startLiveUpdates();
+			}
+		},
+		[isLive, startLiveUpdates, stopLiveUpdates]
+	);
 
 	useEffect(() => {
 		if (gameId) {
@@ -187,7 +256,12 @@ export default function GameDetailPage() {
 
 	return (
 		<div className="min-h-screen bg-primary-50 dark:bg-primary-900">
-			<GamePage gameData={gameData} gameId={gameId} originalGame={originalGame} />
+			<GamePage
+				gameData={gameData}
+				gameId={gameId}
+				originalGame={originalGame}
+				onLiveUpdateSettingsChange={handleLiveUpdateSettingsChange}
+			/>
 		</div>
 	);
 }

@@ -7,11 +7,13 @@ import GamePreview from './GamePreview';
 import LoadingSpinner from './LoadingSpinner';
 import * as TeamLogos from './team-logos';
 import { formatDate, formatTime, getStatusColor, getGameStatusFromMLB } from '@/lib/utils';
-
+import { WifiOff } from 'lucide-react';
+import { Wifi } from '@/components/animate-ui/icons/wifi';
 interface GamePageProps {
 	gameData: GameData;
 	gameId: string;
 	originalGame?: Game | null;
+	onLiveUpdateSettingsChange?: (settings: { enableLiveUpdates: boolean; liveUpdateDelay: number }) => void;
 }
 
 interface InningData {
@@ -291,10 +293,21 @@ const getGridColsClass = (totalColumns: number) => {
 	return gridClasses[totalColumns] || 'grid-cols-13';
 };
 
-const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: GamePageProps) {
+const GamePage = memo(function GamePage({ gameData, gameId, originalGame, onLiveUpdateSettingsChange }: GamePageProps) {
 	const [detailedData, setDetailedData] = useState<any>(null);
 	const [activeTab, setActiveTab] = useState<'preview' | 'traditional' | 'stats' | 'events'>('preview');
 	const [selectedInning, setSelectedInning] = useState<number | null>(null);
+
+	// Live update settings
+	const [enableLiveUpdates, setEnableLiveUpdates] = useState(true);
+	const [liveUpdateDelay, setLiveUpdateDelay] = useState(0);
+
+	// Notify parent when live update settings change
+	useEffect(() => {
+		if (onLiveUpdateSettingsChange) {
+			onLiveUpdateSettingsChange({ enableLiveUpdates, liveUpdateDelay });
+		}
+	}, [enableLiveUpdates, liveUpdateDelay]);
 
 	// Preserve original team data to prevent it from being overwritten by live updates
 	const [originalTeamData, setOriginalTeamData] = useState<{
@@ -362,15 +375,16 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 
 	// Update detailed data when gameData changes (from parent live updates)
 	useEffect(() => {
-		if (gameData && gameData.game_data && transformedData) {
+		if (gameData && gameData.game_data) {
 			// Process the detailed data with memoized transformations
 			const processedData = {
 				...transformedData,
-				innings: transformedData.innings.map((inning: any) => ({
-					inning: inning.inning,
-					away_runs: inning.away_runs || 0,
-					home_runs: inning.home_runs || 0,
-				})),
+				innings:
+					transformedData?.innings?.map((inning: any) => ({
+						inning: inning.inning,
+						away_runs: inning.away_runs || 0,
+						home_runs: inning.home_runs || 0,
+					})) || [],
 				batters: gameData.game_data.player_stats?.away?.batters
 					? {
 							away: gameData.game_data.player_stats.away.batters.map((batter: any) => ({
@@ -421,7 +435,7 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 			};
 			setDetailedData(processedData);
 		}
-	}, [gameData, transformedData]);
+	}, [gameData]);
 
 	// Memoize tab change handler
 	const handleTabChange = useCallback((tab: 'preview' | 'traditional' | 'stats' | 'events') => {
@@ -1213,8 +1227,8 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 			</div>
 
 			{/* Tabs */}
-			<div className="my-4">
-				<div className="border-b border-primary-200 dark:border-primary-600">
+			<div className="mt-6">
+				<div className="border-b border-primary-300 dark:border-primary-600">
 					<nav className="flex justify-center -mb-px">
 						{[
 							{ id: 'preview', label: 'Game Preview' },
@@ -1237,6 +1251,50 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 				</div>
 			</div>
 
+			{/* Live Update Controls - Only show for live games */}
+			{originalGame?.is_live && (
+				<div className="flex items-start mb-4 border-b bg-primary-50 dark:bg-primary-800 border-primary-300 dark:border-primary-700">
+					<div className="flex items-center px-3 py-4 h-14 border-r border-primary-200 dark:border-primary-800">
+						{enableLiveUpdates ? (
+							<Wifi animate loop loopDelay={1000} className="w-8 h-8 text-green-500" />
+						) : (
+							<WifiOff className="w-8 h-8 text-red-500" />
+						)}
+					</div>
+					<div className="flex gap-2 items-center px-3 h-14 border-r border-primary-200 dark:border-primary-800">
+						<input
+							type="checkbox"
+							id="enableLiveUpdates"
+							checked={enableLiveUpdates}
+							onChange={(e) => setEnableLiveUpdates(e.target.checked)}
+							className="w-4 h-4 bg-gray-100 rounded border-gray-300 text-accent-600 focus:ring-accent-500 dark:focus:ring-accent-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+						/>
+						<label htmlFor="enableLiveUpdates" className="text-sm font-medium text-primary-900 dark:text-primary-100">
+							Update live
+						</label>
+					</div>
+					<div className="flex gap-2 items-center px-3 h-14 border-r border-primary-300 dark:border-primary-800">
+						<div className={`flex gap-2 items-center ${!enableLiveUpdates ? 'opacity-50 pointer-events-none' : ''}`}>
+							<label htmlFor="liveUpdateDelay" className="text-sm font-medium text-primary-900 dark:text-primary-100">
+								Delay:
+							</label>
+							<select
+								id="liveUpdateDelay"
+								value={liveUpdateDelay}
+								onChange={(e) => setLiveUpdateDelay(Number(e.target.value))}
+								className="px-2 py-1 text-sm bg-white rounded border border-primary-300 dark:border-primary-600 dark:bg-primary-700 text-primary-900 dark:text-primary-100"
+								disabled={!enableLiveUpdates}>
+								<option value={0}>No delay</option>
+								<option value={5}>5 seconds</option>
+								<option value={10}>10 seconds</option>
+								<option value={30}>30 seconds</option>
+								<option value={60}>1 minute</option>
+							</select>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Content */}
 			<div className="overflow-x-scroll">
 				{activeTab === 'preview' && (
@@ -1255,8 +1313,8 @@ const GamePage = memo(function GamePage({ gameData, gameId, originalGame }: Game
 						gameId={gameId}
 						gamePk={originalGame?.game_pk?.toString()}
 						isLiveGame={originalGame?.is_live || false}
-						enableLiveUpdates={true}
-						liveUpdateDelay={0} // No delay by default, can be configured later
+						enableLiveUpdates={enableLiveUpdates}
+						liveUpdateDelay={liveUpdateDelay}
 					/>
 				)}
 				{activeTab === 'stats' && renderStats()}

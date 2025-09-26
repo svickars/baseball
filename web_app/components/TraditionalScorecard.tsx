@@ -4079,7 +4079,7 @@ const BatterRow = ({
 									<div className="relative z-10 w-full h-full">
 										{/* Center text - positioned in top-left corner, left-aligned */}
 										<span
-											className={`absolute top-0 left-0 font-mono text-xs text-primary-900 dark:text-primary-100 px-0.5 pt-[1px] h-4 border-b border-r border-primary-400 dark:border-primary-600 ${
+											className={`absolute top-0 left-0 font-mono min-w-4 text-xs text-primary-900 dark:text-primary-100 px-0.5 pt-[1px] h-4 border-b border-r border-primary-400 dark:border-primary-600 ${
 												shouldUseCenterText(atBatResult.atBatResult, atBatResult.description)
 													? '[text-shadow:1px_1px_0_white,-1px_-1px_0_white,1px_-1px_0_white,-1px_1px_0_white] dark:[text-shadow:1px_1px_0_rgb(30_41_59),-1px_-1px_0_rgb(30_41_59),1px_-1px_0_rgb(30_41_59),-1px_1px_0_rgb(30_41_59)]'
 													: ''
@@ -6013,34 +6013,8 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 		);
 	}
 
-	// Live update indicator component
-	const LiveUpdateIndicator = () => {
-		if (!isLiveGame || !enableLiveUpdates) return null;
-
-		return (
-			<div className="flex justify-center items-center p-2 mb-4 rounded-lg border bg-primary-50 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
-				<div className="flex gap-2 items-center">
-					{isLive ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-red-500" />}
-					<span className="text-sm font-medium text-primary-900 dark:text-primary-100">
-						{isLive ? 'Live Updates Active' : 'Live Updates Disconnected'}
-					</span>
-					{liveUpdateDelay > 0 && (
-						<span className="text-xs text-primary-600 dark:text-primary-400">(+{liveUpdateDelay}s delay)</span>
-					)}
-					{isLiveLoading && (
-						<div className="w-4 h-4 rounded-full border-2 animate-spin border-primary-300 border-t-primary-600"></div>
-					)}
-					{liveError && <span className="ml-2 text-xs text-red-600 dark:text-red-400">Error: {liveError}</span>}
-				</div>
-			</div>
-		);
-	};
-
 	return (
 		<div>
-			{/* Live Update Indicator */}
-			<LiveUpdateIndicator />
-
 			{/* Traditional Scorecard Grid */}
 			{renderScorecardGrid()}
 
