@@ -735,7 +735,7 @@ const AtBatTooltip = ({
 	}
 
 	return (
-		<div className="absolute -bottom-2 left-1/2 z-50 px-3 py-2 w-80 text-sm text-white whitespace-normal bg-gray-900 rounded-lg border border-gray-700 shadow-lg opacity-0 transition-opacity duration-200 transform -translate-x-1/2 translate-y-full pointer-events-none dark:bg-gray-900 dark:text-white dark:border-gray-700 group-hover:opacity-100">
+		<div className="absolute -bottom-2 left-1/2 z-[60] px-3 py-2 w-80 text-sm text-white whitespace-normal bg-gray-900 rounded-lg border border-gray-700 shadow-lg opacity-0 transition-opacity duration-200 transform -translate-x-1/2 translate-y-full pointer-events-none dark:bg-gray-900 dark:text-white dark:border-gray-700 group-hover:opacity-100">
 			<div className="mb-1 font-semibold">
 				{actualPlayerName} - {enhancedAtBatResult}
 			</div>
