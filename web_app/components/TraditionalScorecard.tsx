@@ -3938,7 +3938,7 @@ const BatterRow = ({
 				gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
 			}}>
 			{/* Player Number */}
-			<div className="flex flex-col border-r border-primary-400 dark:border-primary-600 h-18">
+			<div className="flex flex-col border-r border-primary-200 dark:border-primary-800 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.number || index + 1}
 				</div>
@@ -4015,7 +4015,7 @@ const BatterRow = ({
 			</div>
 
 			{/* Position */}
-			<div className="flex flex-col border-r border-primary-300 dark:border-primary-700 h-18">
+			<div className="flex flex-col border-r border-primary-400 dark:border-primary-600 h-18">
 				{/* Starter position */}
 				<div className="flex relative justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.starter_initial_position &&
@@ -4353,7 +4353,7 @@ const BatterRow = ({
 				.flat()}
 
 			{/* Stats Columns */}
-			<div className="flex flex-col border-r border-l border-l-primary-400 dark:border-l-primary-600 border-r-primary-400 dark:border-r-primary-600 h-18">
+			<div className="flex flex-col border-r border-l border-l-primary-400 dark:border-l-primary-600 border-r-primary-300 dark:border-r-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.name ? batter.at_bats ?? 0 : ''}
 				</div>
@@ -4364,7 +4364,7 @@ const BatterRow = ({
 					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].at_bats ?? 0 : ''}
 				</div>
 			</div>
-			<div className="flex flex-col border-r border-primary-400 dark:border-primary-600 h-18">
+			<div className="flex flex-col border-r border-primary-300 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.name ? batter.hits ?? 0 : ''}
 				</div>
@@ -4375,7 +4375,7 @@ const BatterRow = ({
 					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].hits ?? 0 : ''}
 				</div>
 			</div>
-			<div className="flex flex-col border-r border-primary-400 dark:border-primary-600 h-18">
+			<div className="flex flex-col border-r border-primary-300 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.name ? batter.runs ?? 0 : ''}
 				</div>
@@ -4386,7 +4386,7 @@ const BatterRow = ({
 					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].runs ?? 0 : ''}
 				</div>
 			</div>
-			<div className="flex flex-col border-r border-primary-400 dark:border-primary-600 h-18">
+			<div className="flex flex-col border-r border-primary-300 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.name ? batter.rbi ?? 0 : ''}
 				</div>
@@ -4397,7 +4397,7 @@ const BatterRow = ({
 					{batter.substitutions?.[1]?.player_name ? batter.substitutions[1].rbi ?? 0 : ''}
 				</div>
 			</div>
-			<div className="flex flex-col border-r border-primary-400 dark:border-primary-600 h-18">
+			<div className="flex flex-col border-r border-primary-300 dark:border-primary-700 h-18">
 				<div className="flex justify-center items-center h-6 font-mono font-medium border-b text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
 					{batter.name ? batter.walks ?? 0 : ''}
 				</div>
@@ -5132,37 +5132,37 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 							style={{
 								gridTemplateColumns: '40px 200px 30px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr',
 							}}>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
 								#
 							</div>
-							<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
 								PITCHERS
 							</div>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-800 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
 								R/L
 							</div>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 								IP
 							</div>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 								P(S)
 							</div>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 								BF
 							</div>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 								H
 							</div>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 								R
 							</div>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 								ER
 							</div>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 								BB
 							</div>
-							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-800 text-primary-900 dark:text-primary-100">
+							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 								K
 							</div>
 							<div className="flex justify-center items-center h-8 font-mono text-xs font-bold text-primary-900 dark:text-primary-100">
@@ -5186,7 +5186,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								</div>
 
 								{/* Pitcher Name */}
-								<div className="flex justify-between items-center px-2 h-8 border-r border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-800">
+								<div className="flex justify-between items-center px-2 h-8 border-r border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
 									<span className="flex-1 min-w-0 font-medium truncate text-2xs text-primary-900 dark:text-primary-100">
 										{pitcher.name || ''}
 									</span>
@@ -5198,17 +5198,17 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								</div>
 
 								{/* Handedness */}
-								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800">
+								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600">
 									{pitcher.name ? pitcher.handedness || 'R' : ''}
 								</div>
 
 								{/* Innings Pitched */}
-								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{pitcher.name ? pitcher.innings_pitched?.toFixed(1) || '0.0' : ''}
 								</div>
 
 								{/* Total Pitches (Strikes) */}
-								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{pitcher.name
 										? pitcher.total_pitches
 											? `${pitcher.total_pitches}(${pitcher.strikes || 0})`
@@ -5217,27 +5217,27 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								</div>
 
 								{/* Batters Faced */}
-								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{pitcher.name ? pitcher.batters_faced || 0 : ''}
 								</div>
 
 								{/* Hits */}
-								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{pitcher.name ? pitcher.hits || 0 : ''}
 								</div>
 
 								{/* Runs */}
-								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{pitcher.name ? pitcher.runs || 0 : ''}
 								</div>
 
 								{/* Earned Runs */}
-								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{pitcher.name ? pitcher.earned_runs || 0 : ''}
 								</div>
 
 								{/* Walks */}
-								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+								<div className="flex justify-center items-center h-8 font-mono font-medium border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{pitcher.name ? pitcher.walks || 0 : ''}
 								</div>
 
@@ -5260,12 +5260,12 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								gridTemplateColumns: '40px 200px 30px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr',
 							}}>
 							{/* Combined first three columns */}
-							<div className="flex col-span-3 justify-end items-center px-2 h-8 font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
+							<div className="flex col-span-3 justify-end items-center px-2 h-8 font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-800">
 								TOTALS
 							</div>
 
 							{/* IP Total */}
-							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 								{(() => {
 									// Convert baseball decimal format to actual fractions for accurate summing
 									let totalThirds = 0;
@@ -5304,7 +5304,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 							</div>
 
 							{/* P(S) Total */}
-							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-[9px] text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 								{(() => {
 									const totalPitches = displayPitchers.reduce((sum, pitcher) => sum + (pitcher.total_pitches || 0), 0);
 									const totalStrikes = displayPitchers.reduce((sum, pitcher) => sum + (pitcher.strikes || 0), 0);
@@ -5313,27 +5313,27 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 							</div>
 
 							{/* BF Total */}
-							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 								{displayPitchers.reduce((sum, pitcher) => sum + (pitcher.batters_faced || 0), 0)}
 							</div>
 
 							{/* H Total */}
-							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 								{displayPitchers.reduce((sum, pitcher) => sum + (pitcher.hits || 0), 0)}
 							</div>
 
 							{/* R Total */}
-							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 								{displayPitchers.reduce((sum, pitcher) => sum + (pitcher.runs || 0), 0)}
 							</div>
 
 							{/* ER Total */}
-							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 								{displayPitchers.reduce((sum, pitcher) => sum + (pitcher.earned_runs || 0), 0)}
 							</div>
 
 							{/* BB Total */}
-							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-200 dark:border-primary-700">
+							<div className="flex justify-center items-center h-8 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 								{displayPitchers.reduce((sum, pitcher) => sum + (pitcher.walks || 0), 0)}
 							</div>
 
@@ -5482,13 +5482,13 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								style={{
 									gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
 								}}>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-600 text-primary-900 dark:text-primary-100">
 									#
 								</div>
 								<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
 									BATTERS
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 									POS
 								</div>
 								{inningColumns
@@ -5514,19 +5514,19 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 										});
 									})
 									.flat()}
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-400 dark:border-l-primary-600 border-r-primary-400 dark:border-r-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-400 dark:border-l-primary-600 border-r-primary-300 dark:border-r-primary-600 text-primary-900 dark:text-primary-100">
 									AB
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-600 text-primary-900 dark:text-primary-100">
 									H
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-600 text-primary-900 dark:text-primary-100">
 									R
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-600 text-primary-900 dark:text-primary-100">
 									RBI
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-600 text-primary-900 dark:text-primary-100">
 									BB
 								</div>
 								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold text-primary-900 dark:text-primary-100">
@@ -5566,13 +5566,17 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 									gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
 								}}>
 								{/* Combined first three columns */}
-								<div className="flex col-span-3 justify-end items-center h-10 font-normal border-r text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
-									<div className="grid grid-cols-2 col-span-3 grid-rows-2 w-24 h-full">
-										<div className="flex justify-center items-center border-r border-b text-2xs border-primary-200">
+								<div className="flex col-span-3 justify-end items-center h-10 font-normal border-r text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-800">
+									<div className="grid grid-cols-2 col-span-3 grid-rows-2 w-24 h-full border-l border-primary-200 dark:border-primary-800">
+										<div className="flex justify-center items-center border-r border-b text-2xs border-primary-200 dark:border-primary-800">
 											R
 										</div>
-										<div className="flex justify-center items-center border-b text-2xs border-primary-200">H</div>
-										<div className="flex justify-center items-center border-r text-2xs border-primary-200">LOB</div>
+										<div className="flex justify-center items-center border-b text-2xs border-primary-200 dark:border-primary-800">
+											H
+										</div>
+										<div className="flex justify-center items-center border-r text-2xs border-primary-200 dark:border-primary-800">
+											LOB
+										</div>
 										<div className="flex justify-center items-center text-2xs">E</div>
 									</div>
 								</div>
@@ -5628,12 +5632,12 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 									})
 									.flat()}
 								{/* AB Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r border-l text-2xs text-primary-900 dark:text-primary-100 border-l-primary-400 dark:border-l-primary-600 border-r-primary-400 dark:border-r-primary-600">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r border-l text-2xs text-primary-900 dark:text-primary-100 border-l-primary-400 dark:border-l-primary-600 border-r-primary-300 dark:border-r-primary-700">
 									{detailedData.batters.away.reduce((sum, batter) => sum + (batter.at_bats || 0), 0)}
 								</div>
 
 								{/* H Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{(() => {
 										const inningStats = extractInningStats(detailedData);
 										return inningStats
@@ -5643,7 +5647,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								</div>
 
 								{/* R Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{(() => {
 										const inningStats = extractInningStats(detailedData);
 										return inningStats
@@ -5653,12 +5657,12 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								</div>
 
 								{/* RBI Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{detailedData.batters.away.reduce((sum, batter) => sum + (batter.rbi || 0), 0)}
 								</div>
 
 								{/* BB Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{detailedData.batters.away.reduce((sum, batter) => sum + (batter.walks || 0), 0)}
 								</div>
 
@@ -5802,13 +5806,13 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								style={{
 									gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
 								}}>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-200 dark:border-primary-600 text-primary-900 dark:text-primary-100">
 									#
 								</div>
 								<div className="flex justify-center items-center h-8 text-xs font-bold border-r border-primary-200 dark:border-primary-800 text-primary-900 dark:text-primary-100">
 									BATTERS
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 									POS
 								</div>
 								{inningColumns
@@ -5834,19 +5838,19 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 										});
 									})
 									.flat()}
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-400 dark:border-l-primary-600 border-r-primary-400 dark:border-r-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-l border-l-primary-400 dark:border-l-primary-600 border-r-primary-300 dark:border-r-primary-700 text-primary-900 dark:text-primary-100">
 									AB
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 									H
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 									R
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 									RBI
 								</div>
-								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-400 dark:border-primary-600 text-primary-900 dark:text-primary-100">
+								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold border-r border-primary-300 dark:border-primary-700 text-primary-900 dark:text-primary-100">
 									BB
 								</div>
 								<div className="flex justify-center items-center h-8 font-mono text-xs font-bold text-primary-900 dark:text-primary-100">
@@ -5886,13 +5890,17 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 									gridTemplateColumns: `40px 200px 30px ${inningColumnTemplate} 45px 45px 45px 45px 45px 45px`,
 								}}>
 								{/* Combined first three columns */}
-								<div className="flex col-span-3 justify-end items-center h-10 font-normal border-r text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-800 bg-primary-50 dark:bg-primary-800">
-									<div className="grid grid-cols-2 col-span-3 grid-rows-2 w-24 h-full">
-										<div className="flex justify-center items-center border-r border-b text-2xs border-primary-200">
+								<div className="flex col-span-3 justify-end items-center h-10 font-normal border-r text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-800">
+									<div className="grid grid-cols-2 col-span-3 grid-rows-2 w-24 h-full border-l border-primary-200 dark:border-primary-800">
+										<div className="flex justify-center items-center border-b text-2xs border-primary-200 dark:border-primary-800">
 											R
 										</div>
-										<div className="flex justify-center items-center border-b text-2xs border-primary-200">H</div>
-										<div className="flex justify-center items-center border-r text-2xs border-primary-200">LOB</div>
+										<div className="flex justify-center items-center border-b text-2xs border-primary-200 dark:border-primary-800">
+											H
+										</div>
+										<div className="flex justify-center items-center border-r text-2xs border-primary-200 dark:border-primary-800">
+											LOB
+										</div>
 										<div className="flex justify-center items-center text-2xs">E</div>
 									</div>
 								</div>
@@ -5948,12 +5956,12 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 									})
 									.flat()}
 								{/* AB Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r border-l text-2xs text-primary-900 dark:text-primary-100 border-l-primary-300 dark:border-l-primary-800 border-r-primary-400 dark:border-r-primary-700">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r border-l text-2xs text-primary-900 dark:text-primary-100 border-l-primary-400 dark:border-l-primary-600 border-r-primary-300 dark:border-r-primary-700">
 									{detailedData.batters.home.reduce((sum, batter) => sum + (batter.at_bats || 0), 0)}
 								</div>
 
 								{/* H Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{(() => {
 										const inningStats = extractInningStats(detailedData);
 										return inningStats
@@ -5963,7 +5971,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								</div>
 
 								{/* R Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{(() => {
 										const inningStats = extractInningStats(detailedData);
 										return inningStats
@@ -5973,12 +5981,12 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 								</div>
 
 								{/* RBI Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{detailedData.batters.home.reduce((sum, batter) => sum + (batter.rbi || 0), 0)}
 								</div>
 
 								{/* BB Total */}
-								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-400 dark:border-primary-600">
+								<div className="flex justify-center items-center h-10 font-mono font-bold border-r text-2xs text-primary-900 dark:text-primary-100 border-primary-300 dark:border-primary-700">
 									{detailedData.batters.home.reduce((sum, batter) => sum + (batter.walks || 0), 0)}
 								</div>
 
