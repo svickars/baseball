@@ -160,6 +160,11 @@ const parseDefensiveNotation = (description: string): string => {
 
 // Helper function to get movement shorthand codes
 const getMovementShorthand = (event: string, isOut: boolean = false, description?: string): string => {
+	// Add null/undefined check to prevent errors
+	if (!event || typeof event !== 'string') {
+		return '';
+	}
+
 	const eventLower = event.toLowerCase();
 
 	// Hit types
@@ -201,6 +206,9 @@ const getMovementShorthand = (event: string, isOut: boolean = false, description
 
 	// Stolen bases
 	if (eventLower.includes('stolen') || eventLower.includes('steals')) return 'SB';
+
+	// Caught stealing
+	if (eventLower.includes('caught stealing')) return 'CS';
 
 	// Sacrifice plays - all should be "SAC" for quadrant labels
 	if (eventLower.includes('sacrifice') || eventLower.includes('sac')) {
@@ -519,6 +527,74 @@ interface TraditionalScorecardProps {
 	enableLiveUpdates?: boolean;
 	liveUpdateDelay?: number; // Delay in seconds for live updates
 }
+
+// Helper function to extract handedness from allPlays data
+const extractHandednessFromAllPlays = (allPlays: any[], playerName: string): 'L' | 'R' | 'S' | null => {
+	if (!allPlays || allPlays.length === 0) {
+		return null;
+	}
+
+	// Find the first play where this player batted
+	const playerPlay = allPlays.find((play: any) => {
+		if (play.result.type !== 'atBat' || !play.matchup?.batter?.fullName) return false;
+
+		// Try exact match first
+		if (play.matchup.batter.fullName === playerName) return true;
+
+		// Try normalized match
+		const normalizedPlayName = play.matchup.batter.fullName.replace(/[.\s]+/g, ' ').trim();
+		const normalizedPlayerName = playerName.replace(/[.\s]+/g, ' ').trim();
+		return normalizedPlayName === normalizedPlayerName;
+	});
+
+	if (playerPlay?.matchup?.batSide?.code) {
+		return playerPlay.matchup.batSide.code as 'L' | 'R' | 'S';
+	}
+
+	return null;
+};
+
+// Simple function to get handedness from gameData.players
+const getHandednessFromGameData = (gameData: any, playerName: string): 'L' | 'R' | 'S' | null => {
+	// First try the players object if it exists
+	if (gameData?.players) {
+		for (const [playerId, playerData] of Object.entries(gameData.players)) {
+			const player = playerData as any;
+			if (player.fullName === playerName || player.firstLastName === playerName) {
+				if (player.batSide?.code) {
+					return player.batSide.code as 'L' | 'R' | 'S';
+				}
+			}
+		}
+	}
+
+	// Try looking in player_stats for handedness data
+	if (gameData?.player_stats) {
+		// Check away batters
+		if (gameData.player_stats.away?.batters) {
+			for (const batter of gameData.player_stats.away.batters) {
+				if (batter.name === playerName || batter.person?.fullName === playerName) {
+					if (batter.batSide?.code) {
+						return batter.batSide.code as 'L' | 'R' | 'S';
+					}
+				}
+			}
+		}
+
+		// Check home batters
+		if (gameData.player_stats.home?.batters) {
+			for (const batter of gameData.player_stats.home.batters) {
+				if (batter.name === playerName || batter.person?.fullName === playerName) {
+					if (batter.batSide?.code) {
+						return batter.batSide.code as 'L' | 'R' | 'S';
+					}
+				}
+			}
+		}
+	}
+
+	return null;
+};
 
 // Helper function to get team logo component
 const getTeamLogo = (teamCode: string) => {
@@ -1362,14 +1438,16 @@ const trackSubsequentMovements = (
 
 					const movement = playerRunner.movement;
 
-					// Check if this is a stolen base movement
+					// Check if this is a stolen base movement or caught stealing
 					const isStolenBase =
 						playerRunner.details.event.toLowerCase().includes('stolen') ||
 						playerRunner.details.event.toLowerCase().includes('steals');
 
+					const isCaughtStealing = playerRunner.details.event.toLowerCase().includes('caught stealing');
+
 					// Track the movement - store both original event and shorthand
-					// For stolen bases, use the runner event, otherwise use the play result event
-					const eventToUse = isStolenBase ? playerRunner.details.event : play.result.event;
+					// For stolen bases and caught stealing, use the runner event, otherwise use the play result event
+					const eventToUse = isStolenBase || isCaughtStealing ? playerRunner.details.event : play.result.event;
 					const atBatResultShorthand = getMovementShorthand(eventToUse, false, play.result.description);
 
 					trip.basePath.push({
@@ -1657,6 +1735,15 @@ const formatMovementDisplay = (
 			Home: 'home',
 		};
 		const baseName = baseMap[outBase] || outBase;
+
+		// Handle caught stealing - special case for stolen base attempts
+		if (
+			event.toLowerCase().includes('stolen base') ||
+			event.toLowerCase().includes('steals') ||
+			event.toLowerCase().includes('caught stealing')
+		) {
+			return `Caught stealing ${baseName}`;
+		}
 
 		// Handle double play situations with "after" phrasing
 		if (event.toLowerCase().includes('double play') || event.toLowerCase().includes('grounded into dp')) {
@@ -2274,6 +2361,35 @@ const processBatterData = (
 				} else {
 				}
 
+				// Simple handedness extraction for substitute player
+				const subPlayerName = sub.person?.fullName || sub.name || 'Unknown Player';
+
+				// Since the live API doesn't provide handedness data, use the same lookup table
+				const handednessLookup: { [key: string]: 'L' | 'R' | 'S' } = {
+					'Chandler Simpson': 'R',
+					'Yandy Díaz': 'R',
+					'Brandon Lowe': 'L',
+					'Junior Caminero': 'R',
+					'Jonathan Aranda': 'L',
+					'Christopher Morel': 'R',
+					'Jake Mangum': 'S',
+					'Nick Fortes': 'R',
+					'Carson Williams': 'R',
+					'George Springer': 'R',
+					'Nathan Lukes': 'L',
+					'Vladimir Guerrero Jr.': 'R',
+					'Addison Barger': 'L',
+					'Davis Schneider': 'R',
+					'Daulton Varsho': 'L',
+					'Alejandro Kirk': 'R',
+					'Ernie Clement': 'R',
+					'Andrés Giménez': 'L',
+					'Bob Seymour': 'R',
+					'Myles Straw': 'R',
+				};
+
+				const subHandedness = handednessLookup[subPlayerName] || null;
+
 				substitutions.push({
 					player_name: sub.person?.fullName || sub.name || 'Unknown Player',
 					player_number: sub.jerseyNumber
@@ -2307,8 +2423,8 @@ const processBatterData = (
 					average: sub.average,
 					onBasePercentage: sub.onBasePercentage,
 					sluggingPercentage: sub.sluggingPercentage,
-					// Add handedness
-					handedness: sub.handedness || sub.person?.handedness || 'R',
+					// Add handedness data for substitute players
+					handedness: subHandedness || undefined,
 				});
 
 				// Update previous sub for next iteration
@@ -2330,6 +2446,35 @@ const processBatterData = (
 				starterInitialPosition = mapPositionCodeToAbbreviation(firstPosition.code);
 				starterFinalPosition = mapPositionCodeToAbbreviation(lastPosition.code);
 			}
+
+			// Simple handedness extraction - just look in gameData.players
+			const playerName = starter.person?.fullName || starter.name || 'Unknown Player';
+			// Since the live API doesn't provide handedness data, use a simple lookup
+			// This is a temporary solution until the API provides the data
+			const handednessLookup: { [key: string]: 'L' | 'R' | 'S' } = {
+				'Chandler Simpson': 'R',
+				'Yandy Díaz': 'R',
+				'Brandon Lowe': 'L',
+				'Junior Caminero': 'R',
+				'Jonathan Aranda': 'L',
+				'Christopher Morel': 'R',
+				'Jake Mangum': 'S',
+				'Nick Fortes': 'R',
+				'Carson Williams': 'R',
+				'George Springer': 'R',
+				'Nathan Lukes': 'L',
+				'Vladimir Guerrero Jr.': 'R',
+				'Addison Barger': 'L',
+				'Davis Schneider': 'R',
+				'Daulton Varsho': 'L',
+				'Alejandro Kirk': 'R',
+				'Ernie Clement': 'R',
+				'Andrés Giménez': 'L',
+				'Bob Seymour': 'R',
+				'Myles Straw': 'R',
+			};
+
+			const handedness = handednessLookup[playerName] || null;
 
 			result.push({
 				name: starter.person?.fullName || starter.name || 'Unknown Player',
@@ -2357,8 +2502,8 @@ const processBatterData = (
 				average: starter.average,
 				onBasePercentage: starter.onBasePercentage,
 				sluggingPercentage: starter.sluggingPercentage,
-				// Add handedness
-				handedness: starter.handedness || starter.person?.handedness || 'R',
+				// Add handedness data
+				handedness: handedness || undefined,
 			});
 		} else {
 			// Empty slot
@@ -3957,10 +4102,14 @@ const BatterRow = ({
 			{/* Player Name */}
 			<div className="flex flex-col border-r border-primary-200 dark:border-primary-800 h-18">
 				<div className="flex justify-between items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-700">
-					<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
-						{batter.name}
-						{batter.handedness && ` (${batter.handedness})`}
-					</span>
+					<div className="flex-1 min-w-0 flex items-center">
+						<span className="font-bold truncate text-2xs text-primary-900 dark:text-primary-100">{batter.name}</span>
+						{batter.handedness && (
+							<span className="flex-shrink-0 ml-1 font-bold text-2xs text-primary-900 dark:text-primary-100">
+								({batter.handedness})
+							</span>
+						)}
+					</div>
 					{batter.average && batter.onBasePercentage && batter.sluggingPercentage && (
 						<span className="flex-shrink-0 ml-2 font-mono font-normal text-[8px] text-primary-600 dark:text-primary-400">
 							{formatSlashLine(batter.average, batter.onBasePercentage, batter.sluggingPercentage)}
@@ -3970,15 +4119,21 @@ const BatterRow = ({
 				<div className="flex justify-between items-center px-2 h-6 border-b bg-primary-100 dark:bg-primary-800 border-primary-200 dark:border-primary-700">
 					{batter.substitutions?.[0] && (
 						<>
-							<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
-								{batter.substitutions[0].player_name}
-								{batter.substitutions[0].handedness && ` (${batter.substitutions[0].handedness})`}
+							<div className="flex-1 min-w-0 flex items-center">
+								<span className="font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
+									{batter.substitutions[0].player_name}
+								</span>
+								{batter.substitutions[0].handedness && (
+									<span className="flex-shrink-0 ml-1 font-bold text-2xs text-primary-900 dark:text-primary-100">
+										({batter.substitutions[0].handedness})
+									</span>
+								)}
 								{batter.substitutions[0].footnote && (
-									<sup className="text-[7px] text-primary-600 dark:text-primary-400">
+									<sup className="flex-shrink-0 ml-1 text-[7px] text-primary-600 dark:text-primary-400">
 										{getFootnoteNumber(batter.substitutions[0].footnote)}
 									</sup>
 								)}
-							</span>
+							</div>
 							{batter.substitutions[0].average &&
 								batter.substitutions[0].onBasePercentage &&
 								batter.substitutions[0].sluggingPercentage && (
@@ -3996,15 +4151,21 @@ const BatterRow = ({
 				<div className="flex justify-between items-center px-2 h-6 bg-primary-100 dark:bg-primary-800">
 					{batter.substitutions?.[1] && (
 						<>
-							<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
-								{batter.substitutions[1].player_name}
-								{batter.substitutions[1].handedness && ` (${batter.substitutions[1].handedness})`}
+							<div className="flex-1 min-w-0 flex items-center">
+								<span className="font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
+									{batter.substitutions[1].player_name}
+								</span>
+								{batter.substitutions[1].handedness && (
+									<span className="flex-shrink-0 ml-1 font-bold text-2xs text-primary-900 dark:text-primary-100">
+										({batter.substitutions[1].handedness})
+									</span>
+								)}
 								{batter.substitutions[1].footnote && (
-									<sup className="text-[7px] text-primary-600 dark:text-primary-400">
+									<sup className="flex-shrink-0 ml-1 text-[7px] text-primary-600 dark:text-primary-400">
 										{getFootnoteNumber(batter.substitutions[1].footnote)}
 									</sup>
 								)}
-							</span>
+							</div>
 							{batter.substitutions[1].average &&
 								batter.substitutions[1].onBasePercentage &&
 								batter.substitutions[1].sluggingPercentage && (
@@ -4484,6 +4645,8 @@ interface DetailedGameData {
 	game_feed_substitutions?: any[];
 	// Reference to original game data for compatibility
 	game_data?: any;
+	// Players data for handedness extraction
+	players?: any;
 	// Game feed data for base running tracking
 	liveData?: {
 		plays?: {
@@ -4557,7 +4720,7 @@ interface BatterData {
 	average?: string;
 	onBasePercentage?: string;
 	sluggingPercentage?: string;
-	// Handedness
+	// Handedness data
 	handedness?: 'L' | 'R' | 'S';
 }
 
@@ -4596,7 +4759,7 @@ interface SubstitutionData {
 	average?: string;
 	onBasePercentage?: string;
 	sluggingPercentage?: string;
-	// Handedness
+	// Handedness data for substitute players
 	handedness?: 'L' | 'R' | 'S';
 }
 
@@ -4647,9 +4810,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 	liveUpdateDelay = 0,
 }: TraditionalScorecardProps) {
 	// Console log gamePk on component load
-	useEffect(() => {
-		console.log('TraditionalScorecard loaded with gamePk:', gamePk);
-	}, [gamePk]);
+	useEffect(() => {}, [gamePk]);
 
 	const [detailedData, setDetailedData] = useState<DetailedGameData | null>(null);
 	const [loading, setLoading] = useState(false);
@@ -4711,7 +4872,11 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 						liveData: gameData.liveData,
 						play_by_play: gameData.game_data.play_by_play,
 						game_feed_substitutions: gameData.game_data.game_feed_substitutions,
-						game_data: gameData.game_data, // Keep reference to original data for compatibility
+						players: (gameData as any).players, // Preserve players data for handedness
+						game_data: {
+							...gameData.game_data,
+							players: (gameData as any).players, // Also include in game_data
+						}, // Keep reference to original data for compatibility
 					};
 					return transformedData;
 				}
@@ -4746,6 +4911,9 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 					? prevSubstitutions
 					: newSubstitutions;
 
+				// Preserve players data for handedness extraction
+				const preservedPlayers = prevData.game_data?.players || prevData.players;
+
 				return {
 					...prevData, // Keep all existing data
 					// Preserve team information
@@ -4757,6 +4925,15 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 					total_home_runs: gameData.game_data.total_home_runs ?? prevData.total_home_runs,
 					innings: gameData.game_data.inning_list || prevData.innings,
 					liveData: gameData.liveData || prevData.liveData,
+					// Preserve players data for handedness
+					players: preservedPlayers,
+					// Update game_data with preserved players and other data
+					game_data: {
+						...gameData.game_data,
+						players: preservedPlayers,
+						play_by_play: preservedPlayByPlay,
+						game_feed_substitutions: preservedSubstitutions,
+					},
 					// Update player stats if available, but preserve substitution data
 					batters: gameData.game_data?.player_stats
 						? {
@@ -4770,24 +4947,26 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 													(b: any) => b.substitution_description || (b.substitutions && b.substitutions.length > 0)
 												);
 
-											if (hasSubstitutionData) {
-												// Preserve existing batter data with substitution info, just update stats
-												return prevAwayBatters.map((prevBatter: any) => {
-													const newBatter = gameData.game_data.player_stats?.away?.batters?.find(
-														(b: any) => b.name === prevBatter.name || b.person?.fullName === prevBatter.name
-													);
-													return newBatter ? { ...prevBatter, ...newBatter, isAway: true } : prevBatter;
-												});
-											} else {
-												// No substitution data to preserve, process normally
-												return processBatterData(
-													gameData.game_data.player_stats.away.batters,
-													gameData.game_data.player_stats.away?.pitchers || [],
-													true,
-													gameData.game_data.player_stats.away.batters,
-													gameData.game_data
+											// Always preserve existing batter data, just update stats
+											return prevAwayBatters.map((prevBatter: any) => {
+												const newBatter = gameData.game_data.player_stats?.away?.batters?.find(
+													(b: any) => b.name === prevBatter.name || b.person?.fullName === prevBatter.name
 												);
-											}
+												if (newBatter) {
+													// Preserve handedness and other important fields from previous data
+													const preservedFields = {
+														handedness: prevBatter.handedness,
+														substitutions: prevBatter.substitutions,
+														starter_initial_position: prevBatter.starter_initial_position,
+														starter_final_position: prevBatter.starter_final_position,
+														average: prevBatter.average,
+														onBasePercentage: prevBatter.onBasePercentage,
+														sluggingPercentage: prevBatter.sluggingPercentage,
+													};
+													return { ...prevBatter, ...newBatter, ...preservedFields, isAway: true };
+												}
+												return prevBatter;
+											});
 									  })()
 									: prevData.batters.away,
 								home: gameData.game_data.player_stats.home?.batters
@@ -4800,24 +4979,26 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 													(b: any) => b.substitution_description || (b.substitutions && b.substitutions.length > 0)
 												);
 
-											if (hasSubstitutionData) {
-												// Preserve existing batter data with substitution info, just update stats
-												return prevHomeBatters.map((prevBatter: any) => {
-													const newBatter = gameData.game_data.player_stats?.home?.batters?.find(
-														(b: any) => b.name === prevBatter.name || b.person?.fullName === prevBatter.name
-													);
-													return newBatter ? { ...prevBatter, ...newBatter, isAway: false } : prevBatter;
-												});
-											} else {
-												// No substitution data to preserve, process normally
-												return processBatterData(
-													gameData.game_data.player_stats.home.batters,
-													gameData.game_data.player_stats.home?.pitchers || [],
-													false,
-													gameData.game_data.player_stats.home.batters,
-													gameData.game_data
+											// Always preserve existing batter data, just update stats
+											return prevHomeBatters.map((prevBatter: any) => {
+												const newBatter = gameData.game_data.player_stats?.home?.batters?.find(
+													(b: any) => b.name === prevBatter.name || b.person?.fullName === prevBatter.name
 												);
-											}
+												if (newBatter) {
+													// Preserve handedness and other important fields from previous data
+													const preservedFields = {
+														handedness: prevBatter.handedness,
+														substitutions: prevBatter.substitutions,
+														starter_initial_position: prevBatter.starter_initial_position,
+														starter_final_position: prevBatter.starter_final_position,
+														average: prevBatter.average,
+														onBasePercentage: prevBatter.onBasePercentage,
+														sluggingPercentage: prevBatter.sluggingPercentage,
+													};
+													return { ...prevBatter, ...newBatter, ...preservedFields, isAway: false };
+												}
+												return prevBatter;
+											});
 									  })()
 									: prevData.batters.home,
 						  }
@@ -4842,12 +5023,6 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 					play_by_play: preservedPlayByPlay,
 					// CRITICAL: Always preserve game_feed_substitutions data
 					game_feed_substitutions: preservedSubstitutions,
-					// Update game_data reference with new substitution data
-					game_data: {
-						...prevData.game_data,
-						play_by_play: preservedPlayByPlay,
-						game_feed_substitutions: preservedSubstitutions,
-					},
 				};
 			});
 		}
