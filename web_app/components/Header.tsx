@@ -58,23 +58,23 @@ export default function Header({ onLoadGames, isLoading, onNavigateToGames, sele
 	const isCurrentDay = currentDate === getTodayLocalDate();
 
 	return (
-		<header className="bg-primary-50 dark:bg-primary-900 border-b border-primary-400 dark:border-primary-700 sticky top-0 z-40">
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+		<header className="bg-primary-50 dark:bg-primary-900 border-b border-primary-400 dark:border-primary-700 sticky top-0 z-[99]">
+			<div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
 				<div className="flex justify-between items-center py-6">
-					<Link href="/" className="hover:opacity-80 transition-opacity">
+					<Link href="/" className="transition-opacity hover:opacity-80">
 						<ResponsiveLogo />
 					</Link>
 
-					<div className="flex items-center gap-4">
+					<div className="flex gap-4 items-center">
 						{currentView === 'games' ? (
 							<>
-								<div className="flex items-center gap-2 text-primary-700"></div>
+								<div className="flex gap-2 items-center text-primary-700"></div>
 
-								<div className="flex items-center gap-2">
+								<div className="flex gap-2 items-center">
 									<button
 										onClick={handlePreviousDay}
 										disabled={isLoading}
-										className="btn btn-primary btn-sm p-2 hover:bg-primary-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+										className="p-2 btn btn-primary btn-sm hover:bg-primary-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
 										aria-label="Previous day"
 										title="Previous day">
 										<ChevronLeft className="w-4 h-4" />
@@ -94,12 +94,12 @@ export default function Header({ onLoadGames, isLoading, onNavigateToGames, sele
 											onFocus={(e) => {
 												// Date input focused
 											}}
-											className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+											className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer"
 											max={getTodayLocalDate()} // Don't allow future dates
 											disabled={isLoading}
 										/>
 										<div
-											className="input text-sm w-full cursor-pointer flex items-center gap-2 pointer-events-none"
+											className="flex gap-2 items-center w-full text-sm cursor-pointer pointer-events-none input"
 											onClick={(e) => {
 												// Visible div clicked
 											}}>
@@ -111,7 +111,7 @@ export default function Header({ onLoadGames, isLoading, onNavigateToGames, sele
 									<button
 										onClick={handleNextDay}
 										disabled={isCurrentDay || isLoading}
-										className="btn btn-primary btn-sm p-2 hover:bg-primary-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+										className="p-2 btn btn-primary btn-sm hover:bg-primary-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
 										aria-label="Next day"
 										title="Next day">
 										<ChevronRight className="w-4 h-4" />
@@ -120,7 +120,7 @@ export default function Header({ onLoadGames, isLoading, onNavigateToGames, sele
 									<button
 										onClick={handleGoToToday}
 										disabled={isCurrentDay || isLoading}
-										className="btn btn-primary btn-sm p-2 hover:bg-primary-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+										className="p-2 btn btn-primary btn-sm hover:bg-primary-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
 										aria-label="Go to today"
 										title="Go to today">
 										<CalendarCheck2 className="w-4 h-4" />
@@ -130,10 +130,10 @@ export default function Header({ onLoadGames, isLoading, onNavigateToGames, sele
 								</div>
 							</>
 						) : (
-							<div className="flex items-center gap-2">
+							<div className="flex gap-2 items-center">
 								<button
 									onClick={handleBackToGames}
-									className="btn btn-primary btn-sm flex items-center gap-2"
+									className="flex gap-2 items-center btn btn-primary btn-sm"
 									aria-label="Back to all games"
 									title="Back to all games">
 									<ArrowLeft className="w-4 h-4" />

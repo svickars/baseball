@@ -1,0 +1,14 @@
+Ernie Clement starter data: {
+    "name": "Ernie Clement",
+    "position": "2B",
+    "normalizedPosition": "4",
+    "hasSubstitutions": false,
+    "substitutions": []
+}
+Ernie Clement starter data: {
+    "name": "Ernie Clement",
+    "position": "2B",
+    "normalizedPosition": "4",
+    "hasSubstitutions": false,
+    "substitutions": []
+}

@@ -6,6 +6,7 @@ import LoadingSpinner from './LoadingSpinner';
 import * as TeamLogos from './team-logos';
 import { baseballApi } from '@/lib/api';
 import { ArrowRight, X, Wifi, WifiOff } from 'lucide-react';
+import DiamondDiagram from './DiamondDiagram';
 import {
 	getAllPitchSequences,
 	getPitchSequenceForAtBat,
@@ -2438,6 +2439,171 @@ const getFootnoteNumber = (footnote: string, substitutionOrder?: number): string
 };
 
 // Helper function to determine base advancement from at-bat result
+// Helper function to map batter data to diamond diagram format
+// Helper function to normalize position to numeric format
+const normalizePosition = (position: string): string => {
+	const positionMap: Record<string, string> = {
+		P: '1',
+		C: '2',
+		'1B': '3',
+		'2B': '4',
+		'3B': '5',
+		SS: '6',
+		LF: '7',
+		CF: '8',
+		RF: '9',
+		DH: '10',
+		PH: 'PH',
+		PR: 'PR',
+		// Handle numeric positions
+		'1': '1',
+		'2': '2',
+		'3': '3',
+		'4': '4',
+		'5': '5',
+		'6': '6',
+		'7': '7',
+		'8': '8',
+		'9': '9',
+		'10': '10',
+	};
+	return positionMap[position] || position;
+};
+
+const mapBattersToDiamondDiagram = (
+	batters: BatterData[]
+): Array<{
+	name: string;
+	position: string;
+	isStarter: boolean;
+	isReplacement?: boolean;
+	replacementOrder?: number;
+	isReplaced?: boolean;
+	positionChanges?: Array<{
+		position: string;
+		inning: number;
+		halfInning: string;
+	}>;
+}> => {
+	const diamondPlayers: Array<{
+		name: string;
+		position: string;
+		isStarter: boolean;
+		isReplacement?: boolean;
+		replacementOrder?: number;
+		isReplaced?: boolean;
+		positionChanges?: Array<{
+			position: string;
+			inning: number;
+			halfInning: string;
+		}>;
+	}> = [];
+
+	// First pass: Add all starters and track who gets replaced
+	batters.forEach((batter) => {
+		const hasSubstitutions = batter.substitutions && batter.substitutions.length > 0;
+
+		// Add starter (always add the original starter) with normalized position
+		diamondPlayers.push({
+			name: batter.name,
+			position: normalizePosition(batter.position),
+			isStarter: true,
+			isReplaced: hasSubstitutions,
+		});
+	});
+
+	// Second pass: Add all substitutions and position changes
+	batters.forEach((batter) => {
+		if (batter.substitutions && batter.substitutions.length > 0) {
+			batter.substitutions.forEach((sub, index) => {
+				// Check if this substitution is a position change for the same player
+				const isPositionChange = sub.player_name === batter.name;
+				const normalizedSubPosition = normalizePosition(sub.position);
+				const normalizedBatterPosition = normalizePosition(batter.position);
+
+				if (isPositionChange && normalizedSubPosition !== normalizedBatterPosition) {
+					// This is a position change - the player is moving to a new position
+					// Find if this player appears in other positions
+					const positionChanges =
+						batter.substitutions
+							?.filter((s) => s.player_name === batter.name)
+							.map((s) => ({
+								position: normalizePosition(s.position),
+								inning: s.inning,
+								halfInning: s.half_inning,
+							})) || [];
+
+					// Add the player as a replacement in their new position
+					diamondPlayers.push({
+						name: sub.player_name,
+						position: normalizedSubPosition,
+						isStarter: false,
+						isReplacement: true,
+						replacementOrder: index + 1,
+						isReplaced: false,
+						positionChanges: positionChanges,
+					});
+				} else {
+					// This is a regular substitution (different player replacing the starter)
+					diamondPlayers.push({
+						name: sub.player_name,
+						position: normalizedSubPosition,
+						isStarter: false,
+						isReplacement: true,
+						replacementOrder: index + 1,
+						isReplaced: false,
+					});
+				}
+			});
+		}
+	});
+
+	// Third pass: Handle position changes using starter_final_position
+	batters.forEach((batter) => {
+		// Check if the player has a different final position than their starting position
+		if (batter.starter_final_position && batter.starter_final_position !== batter.position) {
+			const normalizedInitialPosition = normalizePosition(batter.position);
+			const normalizedFinalPosition = normalizePosition(batter.starter_final_position);
+
+			// Add the player as a replacement in their final position
+			diamondPlayers.push({
+				name: batter.name,
+				position: normalizedFinalPosition,
+				isStarter: false,
+				isReplacement: true,
+				replacementOrder: 1,
+				isReplaced: false,
+				positionChanges: [
+					{
+						position: normalizedFinalPosition,
+						inning: 0, // We don't have inning info for position changes
+						halfInning: 'top',
+					},
+				],
+			});
+		}
+	});
+
+	// Fourth pass: Mark starters as replaced if someone appears as replacement in their position
+	const positionReplacements = new Set<string>();
+
+	// First, collect all positions that have replacements
+	diamondPlayers.forEach((player) => {
+		if (player.isReplacement && player.position) {
+			positionReplacements.add(player.position);
+		}
+	});
+
+	// Then, mark starters as replaced if their position has replacements
+	diamondPlayers.forEach((player) => {
+		if (player.isStarter && positionReplacements.has(player.position)) {
+			player.isReplaced = true;
+		}
+	});
+
+	return diamondPlayers;
+};
+
 const getBaseAdvancement = (
 	atBatResult: string
 ): { first: boolean; second: boolean; third: boolean; home: boolean } => {
@@ -4958,7 +5124,7 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 			}
 
 			return (
-				<div className="w-1/2 border-r border-b border-primary-400 dark:border-primary-800">
+				<div className="w-full border-r border-b border-primary-400 dark:border-primary-800">
 					<div className="overflow-x-auto">
 						{/* Column Headers */}
 						<div
@@ -5506,7 +5672,16 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 				</div>
 
 				{/* Away Team Pitcher Table */}
-				<div className="mb-4">{renderPitcherTable(detailedData.pitchers.away, detailedData.away_team.name)}</div>
+				<div className="flex items-start mb-4 w-full">
+					<div className="w-1/2">{renderPitcherTable(detailedData.pitchers.away, detailedData.away_team.name)}</div>
+					<div className="w-1/2 h-full">
+						<DiamondDiagram
+							players={mapBattersToDiamondDiagram(detailedData.batters.away)}
+							teamName={detailedData.away_team.name}
+							className="h-full"
+						/>
+					</div>
+				</div>
 
 				{/* Away Team Footnotes */}
 				{renderAwayFootnotes()}
@@ -5817,7 +5992,16 @@ const TraditionalScorecard = memo(function TraditionalScorecard({
 				</div>
 
 				{/* Home Team Pitcher Table */}
-				<div>{renderPitcherTable(detailedData.pitchers.home, detailedData.home_team.name)}</div>
+				<div className="flex items-start w-full">
+					<div className="w-1/2">{renderPitcherTable(detailedData.pitchers.home, detailedData.home_team.name)}</div>
+					<div className="w-1/2 h-full">
+						<DiamondDiagram
+							players={mapBattersToDiamondDiagram(detailedData.batters.home)}
+							teamName={detailedData.home_team.name}
+							className="h-full"
+						/>
+					</div>
+				</div>
 
 				{/* Home Team Footnotes */}
 				{renderHomeFootnotes()}
