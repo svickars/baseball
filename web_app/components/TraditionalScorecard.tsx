@@ -2307,6 +2307,8 @@ const processBatterData = (
 					average: sub.average,
 					onBasePercentage: sub.onBasePercentage,
 					sluggingPercentage: sub.sluggingPercentage,
+					// Add handedness
+					handedness: sub.handedness || sub.person?.handedness || 'R',
 				});
 
 				// Update previous sub for next iteration
@@ -2355,6 +2357,8 @@ const processBatterData = (
 				average: starter.average,
 				onBasePercentage: starter.onBasePercentage,
 				sluggingPercentage: starter.sluggingPercentage,
+				// Add handedness
+				handedness: starter.handedness || starter.person?.handedness || 'R',
 			});
 		} else {
 			// Empty slot
@@ -3955,6 +3959,7 @@ const BatterRow = ({
 				<div className="flex justify-between items-center px-2 h-6 border-b bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-700">
 					<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
 						{batter.name}
+						{batter.handedness && ` (${batter.handedness})`}
 					</span>
 					{batter.average && batter.onBasePercentage && batter.sluggingPercentage && (
 						<span className="flex-shrink-0 ml-2 font-mono font-normal text-[8px] text-primary-600 dark:text-primary-400">
@@ -3967,6 +3972,7 @@ const BatterRow = ({
 						<>
 							<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
 								{batter.substitutions[0].player_name}
+								{batter.substitutions[0].handedness && ` (${batter.substitutions[0].handedness})`}
 								{batter.substitutions[0].footnote && (
 									<sup className="text-[7px] text-primary-600 dark:text-primary-400">
 										{getFootnoteNumber(batter.substitutions[0].footnote)}
@@ -3992,6 +3998,7 @@ const BatterRow = ({
 						<>
 							<span className="flex-1 min-w-0 font-bold truncate text-2xs text-primary-900 dark:text-primary-100">
 								{batter.substitutions[1].player_name}
+								{batter.substitutions[1].handedness && ` (${batter.substitutions[1].handedness})`}
 								{batter.substitutions[1].footnote && (
 									<sup className="text-[7px] text-primary-600 dark:text-primary-400">
 										{getFootnoteNumber(batter.substitutions[1].footnote)}
@@ -4550,6 +4557,8 @@ interface BatterData {
 	average?: string;
 	onBasePercentage?: string;
 	sluggingPercentage?: string;
+	// Handedness
+	handedness?: 'L' | 'R' | 'S';
 }
 
 interface SubstitutionData {
@@ -4587,6 +4596,8 @@ interface SubstitutionData {
 	average?: string;
 	onBasePercentage?: string;
 	sluggingPercentage?: string;
+	// Handedness
+	handedness?: 'L' | 'R' | 'S';
 }
 
 interface PitcherData {
